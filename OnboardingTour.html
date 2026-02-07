@@ -1,0 +1,370 @@
+<script>
+// Module de tutoriel officiel InterfaceV2
+// Utilise Shepherd.js (déjà chargé dans <head> via CDN)
+// Fournit:
+//   OnboardingTour.start()    -> lance le tutoriel
+//   OnboardingTour.autoStart() -> lance 1 seule fois pour les nouveaux
+
+(function () {
+
+  // Gère la mise en surbrillance
+  function highlight(selector) {
+    // On nettoie d'abord les précédents
+    document.querySelectorAll('.tour-highlight').forEach(el => {
+      el.classList.remove('tour-highlight');
+    });
+
+    if (!selector) return;
+    const el = document.querySelector(selector);
+    if (el) {
+      el.classList.add('tour-highlight');
+    }
+  }
+
+  function clearHighlight() {
+    document.querySelectorAll('.tour-highlight').forEach(el => {
+      el.classList.remove('tour-highlight');
+    });
+  }
+
+  function createTour() {
+    if (!window.Shepherd) {
+      console.error("Shepherd.js introuvable");
+      alert("Le tutoriel est momentanément indisponible.");
+      return null;
+    }
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        classes: 'shepherd-bubble',
+        scrollTo: false,
+        canClickTarget: false,
+        cancelIcon: { enabled: true },
+      },
+      useModalOverlay: true
+    });
+    
+    // Ajouter le thème CSS pro lisible pour vidéoprojection + halo
+    const style = document.createElement('style');
+    style.textContent = `
+/* Halo visuel temporaire sur la cible */
+.tour-highlight {
+  position: relative;
+  z-index: 999998 !important;
+  outline: 3px solid #1e40af;
+  outline-offset: 2px;
+  border-radius: 10px;
+  box-shadow:
+    0 0 20px rgba(30,64,175,0.6),
+    0 0 4px rgba(30,64,175,0.9);
+  transition: box-shadow .12s linear, outline-color .12s linear;
+}
+
+/* Conteneur global du step */
+.shepherd-element {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 999999 !important;
+  max-width: 600px;
+  width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.4),
+    0 2px 4px rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 24px 24px 20px 24px;
+  color: #0f172a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", Roboto, sans-serif;
+}
+
+/* Zone de contenu texte */
+.shepherd-content {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Texte principal */
+.shepherd-text {
+  max-height: none !important;
+  overflow: visible !important;
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #0f172a;
+}
+
+/* Petit sous-titre d'étape */
+.shepherd-text .step-meta {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+/* Titre */
+.shepherd-text .step-title {
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+/* Corps descriptif */
+.shepherd-text .step-body {
+  font-size: 18px;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+/* Footer boutons */
+.shepherd-footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* Bouton principal */
+.shepherd-button {
+  appearance: none;
+  border-radius: 10px;
+  border: 1px solid #1e40af;
+  background: #1e40af;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 500;
+  padding: 10px 16px;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px rgba(30,64,175,0.4),
+    0 1px 2px rgba(0,0,0,0.6);
+  transition: all .12s linear;
+}
+.shepherd-button:hover {
+  filter: brightness(1.08);
+}
+
+/* Bouton secondaire */
+.shepherd-button-secondary {
+  background: transparent !important;
+  color: #475569 !important;
+  border: 1px solid rgba(0,0,0,0.15) !important;
+  box-shadow: none !important;
+}
+.shepherd-button-secondary:hover {
+  background: rgba(0,0,0,0.03) !important;
+}
+
+/* On vire le header décoratif */
+.shepherd-header {
+  display: none !important;
+}
+    `;
+    document.head.appendChild(style);
+
+    // Étape 1 : bienvenue
+    tour.addStep({
+      id: 'intro',
+      text: `
+        <div class="step-meta">Étape 1 / 5 · Bienvenue</div>
+        <div class="step-title">Répartition des classes</div>
+        <div class="step-body">
+          Cet outil sert à construire les classes, équilibrer les profils
+          et préparer la version finale officielle.
+          <br><br>
+          On va voir : Affichage, Comparer, Éditer, Finaliser, et la zone de travail.
+        </div>
+      `,
+      when: {
+        show: () => { clearHighlight(); }
+      },
+      buttons: [
+        {
+          text: 'Suivant',
+          action: tour.next,
+          classes: 'shepherd-button'
+        }
+      ]
+    });
+
+    // Étape 2 : zone "Régler"
+    tour.addStep({
+      id: 'regler',
+      text: `
+        <div class="step-meta">Étape 2 / 5 · Affichage</div>
+        <div class="step-title">Régler l'affichage</div>
+        <div class="step-body">
+          Ici tu ajustes juste ce qu'on voit : taille des noms,
+          badges, fond clair/sombre, infos visuelles.
+          <br><br>
+          C'est aussi là que tu trouves l'Aide et les raccourcis.
+        </div>
+      `,
+      when: {
+        show: () => { highlight('[data-tour="regler-btn"]'); }
+      },
+      buttons: [
+        {
+          text: 'Précédent',
+          action: tour.back,
+          classes: 'shepherd-button shepherd-button-secondary'
+        },
+        {
+          text: 'Suivant',
+          action: tour.next,
+          classes: 'shepherd-button'
+        }
+      ]
+    });
+
+    // Étape 3 : zone "Comparer"
+    tour.addStep({
+      id: 'comparer',
+      text: `
+        <div class="step-meta">Étape 3 / 5 · Contrôle</div>
+        <div class="step-title">Comparer les classes</div>
+        <div class="step-body">
+          Ici tu ouvres les statistiques : équilibre filles/garçons,
+          LV2, options, comportement.
+          <br><br>
+          C'est l'argumentaire quand quelqu'un dit
+          "cette classe est trop faible".
+        </div>
+      `,
+      when: {
+        show: () => { highlight('[data-tour="comparer-btn"]'); }
+      },
+      buttons: [
+        {
+          text: 'Précédent',
+          action: tour.back,
+          classes: 'shepherd-button shepherd-button-secondary'
+        },
+        {
+          text: 'Suivant',
+          action: tour.next,
+          classes: 'shepherd-button'
+        }
+      ]
+    });
+
+    // Étape 4 : zone "Éditer"
+    tour.addStep({
+      id: 'editer',
+      text: `
+        <div class="step-meta">Étape 4 / 5 · Travail</div>
+        <div class="step-title">Déplacer les élèves</div>
+        <div class="step-body">
+          Mode Éditer : tu actives le swap.
+          <br>
+          Clique Élève A puis Élève B pour les échanger.
+          <br><br>
+          Ça respecte les contraintes (élèves à séparer, fixes, etc.).
+        </div>
+      `,
+      when: {
+        show: () => { highlight('[data-tour="editer-btn"]'); }
+      },
+      buttons: [
+        {
+          text: 'Précédent',
+          action: tour.back,
+          classes: 'shepherd-button shepherd-button-secondary'
+        },
+        {
+          text: 'Suivant',
+          action: tour.next,
+          classes: 'shepherd-button'
+        }
+      ]
+    });
+
+    // Étape 5 : Finaliser
+    tour.addStep({
+      id: 'finaliser',
+      text: `
+        <div class="step-meta">Étape 5 / 5 · Validation</div>
+        <div class="step-title">Finaliser</div>
+        <div class="step-body">
+          Quand c'est bon : FINALISER.
+          <br><br>
+          On fige la répartition actuelle comme version
+          "officielle séance conseil".
+          <br>
+          C'est ce qu'on exporte.
+        </div>
+      `,
+      when: {
+        show: () => { highlight('[data-tour="finalize-btn"]'); }
+      },
+      buttons: [
+        {
+          text: 'Terminer',
+          action: () => {
+            clearHighlight();
+            tour.complete();
+          },
+          classes: 'shepherd-button'
+        }
+      ]
+    });
+
+    // Important : quand le tour se ferme, retirer les halos
+    tour.on('cancel', clearHighlight);
+    tour.on('complete', clearHighlight);
+
+    return tour;
+  }
+
+  function start() {
+    // Annule un éventuel tour en cours pour éviter les doublons
+    if (window.__activeTour && typeof window.__activeTour.cancel === 'function') {
+      try { window.__activeTour.cancel(); } catch(e) {}
+    }
+
+    const tour = createTour();
+    if (!tour) return;
+    window.__activeTour = tour;
+    tour.start();
+  }
+
+  function autoStart() {
+    // On ne lance automatiquement qu'une seule fois par navigateur
+    try {
+      const already = localStorage.getItem('hasSeenTutorialV2');
+      if (already) return;
+      localStorage.setItem('hasSeenTutorialV2', '1');
+    } catch(e) {
+      // si localStorage KO (mode bloqué), on ne crash pas
+    }
+    start();
+  }
+
+  // exposer globalement
+  window.OnboardingTour = {
+    start,
+    autoStart
+  };
+
+  // on fournit aussi showTutorial pour le reste du code (menus, raccourcis)
+  window.showTutorial = function () {
+    start();
+  };
+
+})();
+</script>

@@ -1,0 +1,60 @@
+<script>
+// ============================================
+// CHARGEMENT DES MODULES UI AVANCÉS
+// ============================================
+console.log('🎬 DÉBUT InterfaceV2_UIModules_Loader.html');
+console.log('🔄 Chargement des modules UI avancés...');
+
+// Tooltips
+<?!= include('InterfaceV2_modules/ui/Tooltips'); ?>
+
+// Validation Report
+<?!= include('InterfaceV2_modules/ui/ValidationReport'); ?>
+
+// Alertes proactives
+<?!= include('InterfaceV2_modules/ui/ProactiveAlerts'); ?>
+
+// Filtres avancés
+<?!= include('InterfaceV2_modules/ui/AdvancedFilters'); ?>
+
+// Timeline snapshots
+<?!= include('InterfaceV2_modules/ui/SnapshotTimeline'); ?>
+
+// Graphiques avancés
+<?!= include('InterfaceV2_modules/ui/AdvancedCharts'); ?>
+
+// Preview PDF
+<?!= include('InterfaceV2_modules/ui/PDFPreview'); ?>
+
+// Tour guidé
+console.log('📚 Chargement de OnboardingTour...');
+<?!= include('InterfaceV2_modules/ui/OnboardingTour'); ?>
+console.log('✅ OnboardingTour chargé (après include)');
+
+// État réactif
+<?!= include('InterfaceV2_modules/core/ReactiveState'); ?>
+
+console.log('✅ Tous les modules UI avancés chargés');
+
+// Migration : Synchroniser l'ancien système avec le nouveau
+try {
+  const hasSeenOldTutorial = localStorage.getItem('hasSeenTutorial');
+  const hasCompletedNewTutorial = localStorage.getItem('onboarding:completed');
+
+  if (hasSeenOldTutorial === 'true' && !hasCompletedNewTutorial) {
+    console.log('🔄 Migration : ancien tutoriel détecté, marquage du nouveau comme complété');
+    localStorage.setItem('onboarding:completed', 'true');
+    localStorage.setItem('onboarding:completedAt', new Date().toISOString());
+    localStorage.removeItem('hasSeenTutorial'); // Nettoyer l'ancienne clé
+  }
+} catch (e) {
+  console.error('Erreur migration tutoriel:', e);
+}
+
+// Auto-démarrer le tour guidé si premier lancement
+setTimeout(() => {
+  if (typeof OnboardingTour !== 'undefined') {
+    OnboardingTour.autoStart();
+  }
+}, 2000);
+</script>

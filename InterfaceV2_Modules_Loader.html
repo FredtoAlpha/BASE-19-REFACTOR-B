@@ -1,0 +1,33 @@
+<script>
+/**
+ * MODULES LOADER - Chargement des modules refactorisés
+ *
+ * Ce fichier charge les modules refactorisés AVANT le code legacy
+ * pour assurer la compatibilité totale.
+ *
+ * IMPORTANT : Les modules exposent des alias globaux pour compatibilité :
+ * - AppState est aussi accessible via STATE
+ * - ToastManager.show() est aussi accessible via toast()
+ * - etc.
+ */
+
+console.log('🔄 Chargement des modules refactorisés InterfaceV2...');
+
+// Les modules sont chargés dans l'ordre de dépendance :
+// 1. Config (pas de dépendance)
+// 2. State (pas de dépendance)
+// 3. Utils, Toast, Spinner (peuvent utiliser Config et State)
+
+<?!= include('InterfaceV2_Module_Config'); ?>
+<?!= include('InterfaceV2_Module_State'); ?>
+<?!= include('InterfaceV2_modules/core/Utils'); ?>
+<?!= include('InterfaceV2_modules/ui/Toast'); ?>
+<?!= include('InterfaceV2_modules/ui/Spinner'); ?>
+
+console.log('✅ Modules refactorisés chargés - Compatibilité assurée avec le code existant');
+console.log('📊 AppState disponible (alias: STATE)');
+console.log('⚙️ AppConfig disponible');
+console.log('🛠️ AppUtils disponible');
+console.log('💬 ToastManager disponible (alias: toast)');
+console.log('⏳ SpinnerManager disponible (alias: showSpinner/hideSpinner)');
+</script>
