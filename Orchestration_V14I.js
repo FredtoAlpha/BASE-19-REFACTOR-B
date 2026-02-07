@@ -166,29 +166,20 @@ function makeCtxFromSourceSheets_() {
 // ===================================================================
 
 // ===================================================================
-// ✅ FONCTIONS DÉPLACÉES DANS APP.CORE.JS (Phase 5 - Refactoring)
+// ✅ FONCTIONS DÉPLACÉES DANS APP.SHEETSDATA.JS (Phase 5 - Refactoring)
 // ===================================================================
 // Les fonctions suivantes ont été extraites vers App.Core.js :
 // - buildSheetName_(niveau, suffix)
 // - makeSheetsList_(niveaux, suffix)
 // - getActiveSS_()
 //
+// Les fonctions suivantes ont été extraites vers App.SheetsData.js :
+// - getOrCreateSheet_(name)
+// - getOrCreateSheetByExactName_(ss, name)
+//
 // Ces fonctions sont automatiquement disponibles car Google Apps Script
 // charge tous les fichiers .js dans le scope global.
 // ===================================================================
-
-/**
- * Obtient ou crée un onglet
- */
-function getOrCreateSheet_(name) {
-  const ss = getActiveSS_();
-  let sh = ss.getSheetByName(name);
-  if (!sh) {
-    logLine('INFO', '📄 Création onglet: ' + name);
-    sh = ss.insertSheet(name);
-  }
-  return sh;
-}
 
 /**
  * Écrit des valeurs et vérifie. headerRow=1 si tu as des entêtes, sinon 0.
@@ -1013,26 +1004,10 @@ function writeElevesToSheet_(ss, sheetName, eleves) {
   SpreadsheetApp.flush();
 }
 
-/**
- * Helper sûr pour obtenir/créer une feuille par NOM EXACT et la rendre visible
- */
-function getOrCreateSheetByExactName_(ss, name) {
-  let sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-  }
-  try {
-    if (sheet.isSheetHidden && sheet.isSheetHidden()) {
-      sheet.showSheet();
-    }
-  } catch (e) {
-    // Ignorer si l'API ne supporte pas isSheetHidden
-  }
-  return sheet;
-}
+// getOrCreateSheetByExactName_ → déplacée dans App.SheetsData.js
 
 /**
- * Exemple d'écriture directe dans une feuille CACHE avec activation/flush
+ * Écriture directe dans une feuille CACHE avec activation/flush
  */
 function writeToCache_(ctx, baseClass, values) {
   const name = baseClass + 'CACHE';

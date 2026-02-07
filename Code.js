@@ -103,19 +103,6 @@ function clearSpreadsheetCache() {
 }
 
 /**
- * Convertit une valeur en chaîne et la nettoie (trim)
- * Utile pour nettoyer les données lues depuis les cellules du spreadsheet
- * @param {*} value - Valeur à convertir (peut être null, undefined, string, number, etc.)
- * @returns {string} Chaîne nettoyée (sans espaces en début/fin) ou chaîne vide si null/undefined
- */
-function toTrimmedString(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  return String(value).trim();
-}
-
-/**
  * Parse JSON de manière sécurisée avec gestion d'erreurs
  * @param {string} jsonString - Chaîne JSON à parser
  * @param {*} defaultValue - Valeur par défaut en cas d'erreur (default: null)

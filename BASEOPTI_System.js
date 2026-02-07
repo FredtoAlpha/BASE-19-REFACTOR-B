@@ -31,13 +31,7 @@ if (typeof logLine !== 'function') {
   }
 }
 
-/**
- * Récupère ou crée un onglet
- */
-function getOrCreateSheetByName_(name) {
-  const ss = SpreadsheetApp.getActive();
-  return ss.getSheetByName(name) || ss.insertSheet(name);
-}
+// getOrCreateSheetByName_ → supprimée (doublon de getOrCreateSheet_ dans App.SheetsData.js)
 
 /**
  * Vide un onglet et écrit les en-têtes

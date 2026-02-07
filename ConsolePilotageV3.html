@@ -562,6 +562,19 @@
 
     <script>
     // ===================================================================
+        // 0. UTILITAIRE SÉCURITÉ - ÉCHAPPEMENT HTML
+        // ===================================================================
+        function escapeHtml(str) {
+          if (str === null || str === undefined) return '';
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        // ===================================================================
         // 1. VARIABLES GLOBALES & SÉCURITÉ (ANTI-CRASH)
         // ===================================================================
         let currentStructure = null;
@@ -828,7 +841,7 @@
                 
                 const render = (obj, id) => {
                     let h = '<table style="width:100%">';
-                    for(const [k,v] of Object.entries(obj)) h += `<tr><td style="padding:4px">${k}</td><td style="text-align:right;font-weight:bold">${v}</td></tr>`;
+                    for(const [k,v] of Object.entries(obj)) h += `<tr><td style="padding:4px">${escapeHtml(k)}</td><td style="text-align:right;font-weight:bold">${escapeHtml(v)}</td></tr>`;
                     h += '</table>';
                     const target = document.getElementById(id);
                     if(target) target.innerHTML = h || 'Aucun';
@@ -871,27 +884,27 @@
             if(!thead || !tbody) return;
             
             let h = '<th style="text-align:left;padding-left:10px;">CLASSE</th><th>CAPACITÉ</th>';
-            data.lv2.forEach(k => h += `<th>${k}</th>`);
-            data.options.forEach(k => h += `<th>${k}</th>`);
+            data.lv2.forEach(k => h += `<th>${escapeHtml(k)}</th>`);
+            data.options.forEach(k => h += `<th>${escapeHtml(k)}</th>`);
             thead.innerHTML = `<tr>${h}</tr>`;
 
             tbody.innerHTML = '';
             data.classes.forEach((cls, i) => {
                 const tr = document.createElement('tr');
-                
-                let html = `<td><input type="text" value="${cls.name}" 
-                    onchange="updateData(${i},'name',this.value)" 
+
+                let html = `<td><input type="text" value="${escapeHtml(cls.name)}"
+                    onchange="updateData(${i},'name',this.value)"
                     style="text-align:left!important;padding-left:10px;font-size:14px;font-weight:bold"></td>`;
-                
-                html += `<td><input type="number" value="${cls.capacity}" 
-                    onchange="updateData(${i},'capacity',this.value)" 
+
+                html += `<td><input type="number" value="${cls.capacity}"
+                    onchange="updateData(${i},'capacity',this.value)"
                     style="color:#eab308;font-weight:bold"></td>`;
-                
+
                 [...data.lv2, ...data.options].forEach(k => {
                     const val = cls.quotas[k] || 0;
                     const style = val === 0 ? 'color:#475569;font-weight:normal' : 'color:white;font-weight:bold';
-                    html += `<td><input type="number" value="${val}" 
-                        onchange="updateQuota(${i},'${k}',this.value)" 
+                    html += `<td><input type="number" value="${val}"
+                        onchange="updateQuota(${i},'${escapeHtml(k)}',this.value)"
                         style="${style}"></td>`;
                 });
                 tr.innerHTML = html;
@@ -1006,7 +1019,7 @@
                 const w = demand > 0 ? Math.min(100, (offer / demand) * 100) : 0;
                 return `<div style="margin-bottom:5px;padding:5px;background:rgba(255,255,255,0.03);border-radius:4px">
                     <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
-                        <span style="font-weight:bold;color:white">${code}</span>
+                        <span style="font-weight:bold;color:white">${escapeHtml(code)}</span>
                         <span style="color:${c}">${offer} / ${demand}</span>
                     </div>
                     <div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden"><div style="width:${w}%;background:${c};height:100%"></div></div>
@@ -1022,7 +1035,7 @@
                 const w = offer > 0 ? Math.min(100, (demand / offer) * 100) : 0;
                 return `<div style="margin-bottom:5px;padding:5px;background:rgba(255,255,255,0.03);border-radius:4px">
                     <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
-                        <span style="font-weight:bold;color:white">${code}</span>
+                        <span style="font-weight:bold;color:white">${escapeHtml(code)}</span>
                         <span style="color:${c}">${demand} élèves / ${offer} places</span>
                     </div>
                     <div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden"><div style="width:${w}%;background:${c};height:100%"></div></div>
