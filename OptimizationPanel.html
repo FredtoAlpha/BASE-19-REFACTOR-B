@@ -147,7 +147,31 @@ const OptimizationPanel = {
     const n = Math.max(2, Math.min(10, Math.ceil(total / 28) || 4));
     return Array.from({ length: n }, (_, i) => `Classe ${i + 1}`);
   },
-  
+
+  /**
+   * Aplatit STATE.students en un tableau d'élèves, quelle que soit la structure
+   * (dictionnaire plat id->élève, ou structure imbriquée par classe).
+   * @returns {Array<Object>} Tableau plat de tous les élèves
+   */
+  flattenStudents() {
+    const students = STATE.students || {};
+    const flatten = (entry) => {
+      if (!entry) return [];
+      if (Array.isArray(entry)) return entry;
+      if (typeof entry === 'object') {
+        const values = Object.values(entry);
+        if (values.length === 0) return [];
+        const looksLikeStudents = values.every(v =>
+          v && typeof v === 'object' && (v.id || v.nom || v.prenom)
+        );
+        if (looksLikeStudents) return values;
+        return values.flatMap(flatten);
+      }
+      return [];
+    };
+    return flatten(students);
+  },
+
   /**
    * Ouvrir le panneau d'optimisation
    */
@@ -1071,55 +1095,10 @@ const OptimizationPanel = {
       return;
     }
 
-    const students = STATE.students || {};
     const lv2Set = new Set();
     const optSet = new Set();
 
-    // DEBUG: Log structure of STATE.students
-    console.log('🔍 STATE.students structure:', Object.keys(students).length, 'keys');
-    const firstKey = Object.keys(students)[0];
-    console.log('🔍 First key:', firstKey);
-    console.log('🔍 First student sample:', students[firstKey]);
-
-    // Improved flatten to detect if students are already flat (id-based dictionary)
-    const flatten = (entry) => {
-      if (!entry) return [];
-      if (Array.isArray(entry)) return entry;
-      if (typeof entry === 'object') {
-        const values = Object.values(entry);
-        if (values.length === 0) return [];
-
-        // Check if this is already a flat student dictionary
-        // (all values have an 'id' property)
-        const looksLikeStudents = values.every(v =>
-          v && typeof v === 'object' && (v.id || v.nom || v.prenom)
-        );
-
-        if (looksLikeStudents) {
-          console.log('🔍 Detected flat student dictionary');
-          return values;
-        }
-
-        // Otherwise, recursively flatten (for class-based structure)
-        console.log('🔍 Detected nested structure, flattening recursively');
-        return values.flatMap(flatten);
-      }
-      return [];
-    };
-
-    const allStudents = flatten(students);
-    console.log('🔍 Total students after flatten:', allStudents.length);
-
-    // DEBUG: Sample first 3 students
-    if (allStudents.length > 0) {
-      console.log('🔍 Sample students:', allStudents.slice(0, 3).map(s => ({
-        id: s?.id,
-        lv2: s?.lv2,
-        opt: s?.opt,
-        LV2: s?.LV2,
-        OPT: s?.OPT
-      })));
-    }
+    const allStudents = this.flattenStudents();
 
     // ✅ NOUVEAU : Compter les élèves par option/LV2
     const lv2Counts = {};
@@ -1490,22 +1469,9 @@ const OptimizationPanel = {
     }
 
     // Compter le nombre d'élèves par option
-    const students = STATE.students || {};
     const optionCounts = {};
 
-    const flatten = (entry) => {
-      if (!entry) return [];
-      if (Array.isArray(entry)) return entry;
-      if (typeof entry === 'object') {
-        const values = Object.values(entry);
-        const looksLikeStudents = values.every(v => v && typeof v === 'object' && (v.id || v.nom || v.prenom));
-        if (looksLikeStudents) return values;
-        return values.flatMap(flatten);
-      }
-      return [];
-    };
-
-    const allStudents = flatten(students);
+    const allStudents = this.flattenStudents();
     allStudents.forEach((s) => {
       if (!s) return;
       const lv2 = this.normalizeCell(s.lv2 || s.LV2).toUpperCase();
@@ -1589,22 +1555,9 @@ const OptimizationPanel = {
     });
 
     // Compter le nombre total d'élèves par option
-    const students = STATE.students || {};
     const optionCounts = {};
 
-    const flatten = (entry) => {
-      if (!entry) return [];
-      if (Array.isArray(entry)) return entry;
-      if (typeof entry === 'object') {
-        const values = Object.values(entry);
-        const looksLikeStudents = values.every(v => v && typeof v === 'object' && (v.id || v.nom || v.prenom));
-        if (looksLikeStudents) return values;
-        return values.flatMap(flatten);
-      }
-      return [];
-    };
-
-    const allStudents = flatten(students);
+    const allStudents = this.flattenStudents();
     allStudents.forEach((s) => {
       if (!s) return;
       const lv2 = this.normalizeCell(s.lv2 || s.LV2).toUpperCase();
@@ -1722,22 +1675,9 @@ const OptimizationPanel = {
     }
 
     // Compter le total d'élèves par option
-    const students = STATE.students || {};
     const optionCounts = {};
 
-    const flatten = (entry) => {
-      if (!entry) return [];
-      if (Array.isArray(entry)) return entry;
-      if (typeof entry === 'object') {
-        const values = Object.values(entry);
-        const looksLikeStudents = values.every(v => v && typeof v === 'object' && (v.id || v.nom || v.prenom));
-        if (looksLikeStudents) return values;
-        return values.flatMap(flatten);
-      }
-      return [];
-    };
-
-    const allStudents = flatten(students);
+    const allStudents = this.flattenStudents();
     allStudents.forEach((s) => {
       if (!s) return;
       const lv2 = this.normalizeCell(s.lv2 || s.LV2).toUpperCase();
