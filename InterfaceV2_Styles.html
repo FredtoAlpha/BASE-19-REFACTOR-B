@@ -2450,3 +2450,144 @@ main       {                          /* zone qui contient #board  */
         scroll-behavior: auto !important;
       }
     }
+
+    /* ════════════════════════════════════════════════════════════
+       SWAP MODE - Etats visuels globaux (R1)
+       ════════════════════════════════════════════════════════════ */
+
+    /* Bouton swap actif dans le header */
+    #btnSwapHeader.swap-active {
+      background: #2563eb !important;
+      border-color: #1d4ed8 !important;
+      box-shadow: 0 0 20px rgba(37,99,235,0.6), 0 0 3px rgba(37,99,235,1) !important;
+      animation: pulse-swap 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-swap {
+      0%, 100% { box-shadow: 0 0 20px rgba(37,99,235,0.6), 0 0 0 0 rgba(37,99,235,0.7); }
+      50% { box-shadow: 0 0 20px rgba(37,99,235,0.6), 0 0 0 8px rgba(37,99,235,0); }
+    }
+
+    /* Board encadre en bleu quand swap actif */
+    body.swap-mode-active #board {
+      outline: 3px solid #3b82f6;
+      outline-offset: 8px;
+      border-radius: 12px;
+    }
+
+    /* Eleve selectionne (premier clic) */
+    .student-card.swap-selected {
+      outline: 3px solid #2563eb !important;
+      outline-offset: 2px;
+      box-shadow: 0 0 16px rgba(37,99,235,0.5) !important;
+      transform: scale(1.02);
+      z-index: 10;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       JAUGE D'HARMONIE (R2)
+       ════════════════════════════════════════════════════════════ */
+
+    /* Couleurs selon le score */
+    #harmonieProgress.harmonie-excellent { background: linear-gradient(90deg, #10b981, #34d399); }
+    #harmonieProgress.harmonie-bon { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    #harmonieProgress.harmonie-faible { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+    /* Indicateurs avec pastille de couleur */
+    .harm-ok { color: #10b981 !important; }
+    .harm-warn { color: #f59e0b !important; }
+    .harm-bad { color: #ef4444 !important; }
+
+    /* ════════════════════════════════════════════════════════════
+       MODE REUNION (R6) - Optimise pour videoprojecteur
+       ════════════════════════════════════════════════════════════ */
+
+    body.mode-reunion #headerAdminGroup { display: none !important; }
+    body.mode-reunion #btnModeReunion {
+      background: #2563eb !important;
+      color: white !important;
+      border-color: #1d4ed8 !important;
+    }
+
+    /* En mode reunion, agrandir les en-tetes de classes */
+    body.mode-reunion .class-header .classe-name {
+      font-size: 1.2rem !important;
+      font-weight: 800 !important;
+    }
+    body.mode-reunion .class-counts {
+      font-size: 0.95rem !important;
+    }
+
+    /* Agrandir les noms d'eleves en mode reunion */
+    body.mode-reunion .student-fullname {
+      font-size: 1rem !important;
+      font-weight: 600 !important;
+    }
+
+    /* Le swap est toujours actif visuellement en mode reunion */
+    body.mode-reunion #btnSwapHeader {
+      background: #2563eb !important;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       TOOLTIPS BADGES (R10)
+       ════════════════════════════════════════════════════════════ */
+
+    .badge-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 1000;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    .badge-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #1e293b;
+    }
+    .student-card .all-badges [data-badge]:hover .badge-tooltip,
+    .student-card [data-tooltip-text]:hover .badge-tooltip {
+      opacity: 1;
+    }
+
+    /* What-if preview animation */
+    #swapPreviewModal:not(.hidden) #swapPreviewContent {
+      animation: preview-in 0.2s ease-out forwards;
+    }
+    @keyframes preview-in {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* Impact row styling */
+    .impact-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .impact-row.impact-positive { background: #ecfdf5; color: #065f46; }
+    .impact-row.impact-negative { background: #fef2f2; color: #991b1b; }
+    .impact-row.impact-neutral { background: #f8fafc; color: #475569; }
+    .dark .impact-row.impact-positive { background: #064e3b; color: #a7f3d0; }
+    .dark .impact-row.impact-negative { background: #7f1d1d; color: #fecaca; }
+    .dark .impact-row.impact-neutral { background: #1e293b; color: #94a3b8; }
