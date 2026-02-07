@@ -19,6 +19,23 @@
 // FONCTIONS UTILITAIRES GLOBALES (accessibles partout)
 // =======================================================
 
+/**
+ * Échappe les caractères HTML dangereux dans une chaîne.
+ * À utiliser systématiquement avant toute insertion de données
+ * utilisateur (noms, options, classes) via innerHTML.
+ * @param {*} str - Valeur à échapper
+ * @returns {string} Chaîne HTML-safe
+ */
+window.escapeHtml = function(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 // 🔧 PROTECTION REALTIME FEEDBACK
 window.RealTimeFeedback = window.RealTimeFeedback || null;
 
@@ -5054,7 +5071,7 @@ window.updateCharts = updateCharts;
           window.saveProgressManager.updateProgress(progress, 'step3');
 
           // Mise à jour du titre avec le nom de la classe en cours
-          if(header) header.innerHTML = `<i class="fas fa-save mr-2"></i>${title} - ${classe} (${i+1}/${totalClasses})`;
+          if(header) header.innerHTML = `<i class="fas fa-save mr-2"></i>${escapeHtml(title)} - ${escapeHtml(classe)} (${i+1}/${totalClasses})`;
 
           try {
             // ✅ Sauvegarder UNE classe à la fois

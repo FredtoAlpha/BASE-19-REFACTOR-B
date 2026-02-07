@@ -74,17 +74,18 @@ function renderLiveSnapshot(snap) {
   if (wrap) wrap.classList.remove('hidden');
 
   const order = Object.keys(snap.classes).sort((a,b) => a.localeCompare(b, 'fr', {numeric:true}));
+  const esc = typeof escapeHtml === 'function' ? escapeHtml : (s => String(s ?? ''));
   const html = order.map(cls => {
     const c = snap.classes[cls];
-    const lv2 = Object.keys(c.LV2 || {}).map(k => `${k}=${c.LV2[k]}`).join(', ') || '—';
-    const opt = Object.keys(c.OPT || {}).map(k => `${k}=${c.OPT[k]}`).join(', ') || '—';
-    const rows = (c.rows || []).map(r => 
-      `<div class="text-[11px] truncate">• ${r.nom} ${r.prenom} — <span class="opacity-70">LV2:${r.lv2||'—'} OPT:${r.opt||'—'} A:${r.a||'—'} D:${r.d||'—'}</span></div>`
+    const lv2 = Object.keys(c.LV2 || {}).map(k => `${esc(k)}=${c.LV2[k]}`).join(', ') || '—';
+    const opt = Object.keys(c.OPT || {}).map(k => `${esc(k)}=${c.OPT[k]}`).join(', ') || '—';
+    const rows = (c.rows || []).map(r =>
+      `<div class="text-[11px] truncate">• ${esc(r.nom)} ${esc(r.prenom)} — <span class="opacity-70">LV2:${esc(r.lv2)||'—'} OPT:${esc(r.opt)||'—'} A:${esc(r.a)||'—'} D:${esc(r.d)||'—'}</span></div>`
     ).join('');
-    
+
     return `
       <div class="border rounded p-2 shadow-sm bg-white">
-        <div class="text-sm font-semibold">${cls} <span class="text-xs font-normal opacity-60">(${c.total} élèves, ${c.F}F/${c.M}M)</span></div>
+        <div class="text-sm font-semibold">${esc(cls)} <span class="text-xs font-normal opacity-60">(${c.total} élèves, ${c.F}F/${c.M}M)</span></div>
         <div class="text-xs text-gray-600">LV2: ${lv2} | OPT: ${opt}</div>
         ${rows ? `<div class="mt-1 space-y-0.5 text-gray-700">${rows}</div>` : ''}
       </div>`;
@@ -883,8 +884,8 @@ const OptimizationPanel = {
       return;
     }
     
-    container.innerHTML = Array.from(optionsSet).map(opt => 
-      `<span class="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2 mb-2">${opt}</span>`
+    container.innerHTML = Array.from(optionsSet).map(opt =>
+      `<span class="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2 mb-2">${escapeHtml(opt)}</span>`
     ).join('');
   },
   
@@ -1173,7 +1174,7 @@ const OptimizationPanel = {
 
     const optionsList = document.getElementById('optionsList');
     const pills = (arr, cls) => arr.map((opt) =>
-      `<span class="inline-block ${cls} px-3 py-1 rounded-full text-sm font-semibold">${opt}</span>`
+      `<span class="inline-block ${cls} px-3 py-1 rounded-full text-sm font-semibold">${escapeHtml(opt)}</span>`
     ).join(' ');
 
     optionsList.innerHTML = [
@@ -1236,7 +1237,7 @@ const OptimizationPanel = {
         : 'bg-purple-100 text-purple-800 border-purple-300';
 
       return `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold border ${colorClass}">
-        ${stat.name}: ${stat.count} élève${stat.count > 1 ? 's' : ''}
+        ${escapeHtml(stat.name)}: ${stat.count} élève${stat.count > 1 ? 's' : ''}
       </span>`;
     }).join('');
 
@@ -1275,7 +1276,7 @@ const OptimizationPanel = {
     // Générer les badges pour les doubles contraintes
     const doubleBadges = doubleStats.map(stat => {
       return `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold border bg-orange-100 text-orange-800 border-orange-300">
-        🔥 ${stat.combo}: ${stat.count} élève${stat.count > 1 ? 's' : ''}
+        🔥 ${escapeHtml(stat.combo)}: ${stat.count} élève${stat.count > 1 ? 's' : ''}
       </span>`;
     }).join('');
 
@@ -1378,7 +1379,7 @@ const OptimizationPanel = {
         : `${stat.remaining} restant${stat.remaining > 1 ? 's' : ''}`;
 
       return `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold border ${colorClass}" title="${stat.placed} placé(s) sur ${stat.total}">
-        ${icon} ${stat.option}: ${remainingText} <span class="text-xs ml-1">(${stat.placed}/${stat.total})</span>
+        ${icon} ${escapeHtml(stat.option)}: ${remainingText} <span class="text-xs ml-1">(${stat.placed}/${stat.total})</span>
       </span>`;
     }).join('');
 
@@ -1434,7 +1435,7 @@ const OptimizationPanel = {
     if (targetsList) {
       targetsList.innerHTML = distribution.map(item =>
         `<div class="flex justify-between items-center">
-          <span class="font-semibold">${item.name}</span>
+          <span class="font-semibold">${escapeHtml(item.name)}</span>
           <span class="px-3 py-1 bg-green-600 text-white rounded-full text-xs">${item.target} élèves</span>
         </div>`
       ).join('');
@@ -1622,14 +1623,14 @@ const OptimizationPanel = {
             const totalNeeded = optionCounts[option] || 0;
             return `
               <div class="flex items-center justify-between gap-2">
-                <label class="text-sm font-medium min-w-[60px]">${option}</label>
+                <label class="text-sm font-medium min-w-[60px]">${escapeHtml(option)}</label>
                 <div class="flex items-center gap-2 flex-1">
                   <input type="number"
                          class="w-20 px-2 py-1 border rounded text-sm"
                          min="0"
                          max="${totalNeeded}"
                          value="${currentValue}"
-                         onchange="OptimizationPanel.setClassQuota('${clsName}', '${option}', parseInt(this.value) || 0)"
+                         onchange="OptimizationPanel.setClassQuota('${escapeHtml(clsName)}', '${escapeHtml(option)}', parseInt(this.value) || 0)"
                          placeholder="0">
                   <span class="text-xs text-gray-500">/ ${totalNeeded} élèves</span>
                 </div>
@@ -1648,7 +1649,7 @@ const OptimizationPanel = {
     classes.forEach((clsName) => {
       html += `
         <div class="border rounded p-3 bg-white">
-          <h5 class="font-bold mb-2">${clsName}</h5>
+          <h5 class="font-bold mb-2">${escapeHtml(clsName)}</h5>
           ${this.detectedLV2?.length ? section('📚 LV2', this.detectedLV2, clsName) : ''}
           ${this.detectedOPT?.length ? section('🎓 Options', this.detectedOPT, clsName) : ''}
         </div>`;
@@ -2241,7 +2242,7 @@ const OptimizationPanel = {
         }
       }
 
-      optimizationOptions.optionsByClass = optionsByClass;
+      optimizationOptions.optionsByClass = this.classOptionsConfig;
       optimizationOptions.quotasFromInterface = true;
 
       console.log('Options optimisation V14I:', optimizationOptions);
