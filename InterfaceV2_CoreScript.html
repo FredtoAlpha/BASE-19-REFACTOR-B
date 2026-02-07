@@ -1812,7 +1812,65 @@ async function restoreCache() {
 // =======================================================
 let autoSaveInterval = null;
 
-// DÉPLACER STATE ICI ! ET L'EXPOSER SUR WINDOW
+/**
+ * @typedef {Object} StudentScores
+ * @property {string|number} [COM] - Score communication (0/1)
+ * @property {string|number} [TRA] - Score travail
+ * @property {string|number} [PART] - Score participation
+ * @property {string|number} [ABS] - Score absences
+ */
+
+/**
+ * @typedef {Object} Student
+ * @property {string} id - Identifiant unique de l'élève
+ * @property {string} nom - Nom de famille
+ * @property {string} prenom - Prénom
+ * @property {string} sexe - Genre ('F' ou 'M')
+ * @property {string} [lv2] - Langue vivante 2 (ex: 'ESP', 'ALL', 'ITA')
+ * @property {string} [opt] - Option (ex: 'LATIN', 'EURO')
+ * @property {string} [disso] - Code dissociation (groupe à séparer)
+ * @property {string} [asso] - Code association (groupe à garder ensemble)
+ * @property {string} [mobilite] - Statut mobilité ('LIBRE','FIXE','SPEC','CONDI','PERMUT')
+ * @property {StudentScores} [scores] - Scores par critère
+ */
+
+/**
+ * @typedef {Object} SwapAction
+ * @property {string} type - Type d'action ('swap' ou 'move')
+ * @property {string} [studentId] - ID de l'élève déplacé
+ * @property {string} [from] - Classe d'origine
+ * @property {string} [to] - Classe de destination
+ */
+
+/**
+ * @typedef {Object} AppState
+ * @property {string} viewMode - Mode d'affichage ('complete', 'simple', 'compact')
+ * @property {Object<string, Student>} students - Dictionnaire plat id → élève
+ * @property {Object<string, *>} rules - Règles par classe (depuis _STRUCTURE)
+ * @property {Object<string, string[]>} aGroups - Groupes d'association (clé 'A'+code → tableau d'IDs)
+ * @property {SwapAction[]} history - Historique d'actions (undo)
+ * @property {SwapAction[]} historyTimeline - Historique complet (timeline)
+ * @property {SwapAction[]} future - Actions annulées (redo)
+ * @property {boolean} swapMode - Mode permutation actif
+ * @property {string|null} swapFirst - ID du 1er élève sélectionné pour swap
+ * @property {boolean} adminMode - Mode administrateur actif
+ * @property {string} searchTerm - Terme de recherche actuel
+ * @property {boolean} darkMode - Mode sombre
+ * @property {boolean} zoomMode - Mode zoom
+ * @property {boolean} fullscreenStats - Stats en plein écran
+ * @property {boolean} anchoredStats - Stats ancrées
+ * @property {string|null} currentMode - Mode de travail courant (ex: '2NDE')
+ * @property {Array|null} originalData - Données brutes chargées depuis le backend
+ * @property {string} niveau - Niveau détecté (ex: '2NDE', '1ERE')
+ * @property {Object<string, string>} sortOrder - Ordre de tri par classe
+ * @property {boolean} lastSaveError - Dernière sauvegarde en erreur
+ * @property {HTMLElement|null} draggingElement - Élément en cours de drag
+ * @property {HTMLElement|null} dragStartZone - Zone de départ du drag
+ * @property {boolean} has_user_action - Action utilisateur non sauvegardée
+ * @property {number|null} last_save_timestamp - Timestamp dernière sauvegarde
+ */
+
+/** @type {AppState} */
 window.STATE = {
     viewMode: 'complete',
     students: {},
