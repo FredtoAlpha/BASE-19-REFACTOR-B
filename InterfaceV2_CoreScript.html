@@ -3892,6 +3892,8 @@ window.addEventListener('DOMContentLoaded', (event) => {
       toast('Mode normal rétabli', 'info');
     }
   }
+  // Exposer sur window pour les modules externes (bouton header, raccourcis)
+  window.toggleSwapMode = toggleSwapMode;
   
   // S'assurer que performSwapAndClose est bien défini pour la modal
   window.performSwapAndClose = function(id1, id2) {

@@ -639,6 +639,18 @@
       <!-- Séparateur visuel -->
       <div class="w-px h-6 bg-slate-300 dark:bg-slate-600"></div>
 
+      <!-- Mode Reunion -->
+      <button id="btnModeReunion" data-tour="reunion-btn"
+              class="header-btn flex items-center gap-1.5 rounded-lg
+                     tracking-[-0.03em]
+                     bg-slate-200 text-slate-800 hover:bg-slate-300
+                     dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15
+                     shadow-[0_4px_10px_rgba(0,0,0,0.15)]"
+              title="Mode reunion : affichage optimise pour videoprojecteur (raccourci R)">
+        <i class="fas fa-tv text-sm opacity-80"></i>
+        <span>Reunion</span>
+      </button>
+
       <!-- Aide (isolée) -->
       <button onclick="window.showTutorial()"
               class="header-btn flex items-center gap-1.5 rounded-lg
@@ -656,61 +668,19 @@
 </header>
 
 <!-- ══════════════════════════════════════════════════════════════
-     JAUGE D'HARMONIE - Toujours visible sous le header
-     Score global d'equilibre des classes (R2)
+     SWAP CONTEXT - Bandeau contextuel quand le mode echange est actif
+     S'affiche SOUS le header, remplace la barre harmonie supprimee
+     Hauteur 0 quand inactif = zero pixel perdu
      ══════════════════════════════════════════════════════════════ -->
-<div id="harmonieBar" class="sticky top-[52px] z-[999] hidden"
-     role="status" aria-live="polite" aria-label="Score d'harmonie des classes">
-  <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-4 py-1.5 shadow-sm">
-    <div class="flex items-center gap-4 max-w-full">
-
-      <!-- Score principal -->
-      <div class="flex items-center gap-2 min-w-[160px]">
-        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Harmonie</span>
-        <div class="flex items-center gap-1.5">
-          <div class="w-24 h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div id="harmonieProgress" class="h-full rounded-full transition-all duration-500 ease-out bg-emerald-500" style="width: 0%"></div>
-          </div>
-          <span id="harmonieScore" class="text-sm font-bold text-slate-700 dark:text-slate-200 min-w-[36px] text-right">--</span>
-        </div>
-      </div>
-
-      <!-- Indicateurs individuels -->
-      <div class="flex items-center gap-3 text-[11px] font-medium">
-        <span id="harmParite" class="flex items-center gap-1 text-slate-500 dark:text-slate-400" title="Equilibre filles/garcons">
-          <i class="fas fa-venus-mars"></i> <span>--</span>
-        </span>
-        <span id="harmScores" class="flex items-center gap-1 text-slate-500 dark:text-slate-400" title="Repartition des scores COM">
-          <i class="fas fa-chart-bar"></i> <span>--</span>
-        </span>
-        <span id="harmLV2" class="flex items-center gap-1 text-slate-500 dark:text-slate-400" title="Distribution LV2">
-          <i class="fas fa-language"></i> <span>--</span>
-        </span>
-        <span id="harmContraintes" class="flex items-center gap-1 text-slate-500 dark:text-slate-400" title="Contraintes respectees">
-          <i class="fas fa-check-circle"></i> <span>--</span>
-        </span>
-      </div>
-
-      <!-- Swap status contextuel -->
-      <div id="swapContextBar" class="ml-auto flex items-center gap-2 hidden">
-        <div id="swapInstruction" class="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full animate-pulse">
-          Cliquez un premier eleve...
-        </div>
-        <button id="swapCancelBtn" class="text-xs text-red-600 hover:text-red-800 dark:text-red-400 font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20" title="Annuler (Echap)">
-          Annuler
-        </button>
-      </div>
-
-      <!-- Mode Reunion toggle -->
-      <button id="btnModeReunion" data-tour="reunion-btn"
-              class="ml-auto text-[11px] font-semibold px-3 py-1 rounded-lg border transition-all duration-200
-                     text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600
-                     hover:bg-slate-200 dark:hover:bg-slate-700"
-              title="Mode reunion : affichage optimise pour videoprojecteur (raccourci R)">
-        <i class="fas fa-tv mr-1"></i> Reunion
-      </button>
-
-    </div>
+<div id="swapContextBar" class="hidden bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 px-4 py-1.5">
+  <div class="flex items-center justify-center gap-3">
+    <i class="fas fa-exchange-alt text-blue-500 text-sm"></i>
+    <span id="swapInstruction" class="text-sm font-medium text-blue-700 dark:text-blue-300">
+      Cliquez un premier eleve...
+    </span>
+    <button id="swapCancelBtn" class="text-xs text-red-600 hover:text-red-800 dark:text-red-400 font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
+      Annuler
+    </button>
   </div>
 </div>
 
