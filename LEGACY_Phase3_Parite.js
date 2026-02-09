@@ -51,7 +51,7 @@ function Phase3I_completeAndParity_LEGACY(ctx) {
   for (const classe in (ctx.quotas || {})) {
     const quotas = ctx.quotas[classe];
     for (const optName in quotas) {
-      if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0 && quotas[optName] > 0) {
+      if (isKnownLV2(optName) && quotas[optName] > 0) {
         lv2Counts[optName] = (lv2Counts[optName] || 0) + 1;
       }
     }
@@ -157,67 +157,122 @@ function Phase3I_completeAndParity_LEGACY(ctx) {
   
   logLine('INFO', '  ✅ ' + moved + ' élèves rééquilibrés');
 
-  // ========== PLACER ÉLÈVES NON ASSIGNÉS (ESP par défaut) ==========
+  // ========== PLACER ÉLÈVES NON ASSIGNÉS (PLACEMENT INTELLIGENT PAR PROFIL) ==========
   const idxDISSO = headersRef.indexOf('DISSO');
+  const idxCOM = headersRef.indexOf('COM');
+  const idxTRA = headersRef.indexOf('TRA');
+  const idxPART = headersRef.indexOf('PART');
+  const idxABS = headersRef.indexOf('ABS');
   let placed = 0;
 
-  for (let i = 0; i < allData.length; i++) {
-    const item = allData[i];
-    if (String(item.row[idxAssigned] || '').trim()) continue;
+  // Calculer les moyennes COM/TRA par classe pour guider le placement
+  function getClassProfileAvg(cls) {
+    let sumCOM = 0, sumTRA = 0, count = 0;
+    for (let j = 0; j < allData.length; j++) {
+      if (String(allData[j].row[idxAssigned] || '').trim() !== cls) continue;
+      sumCOM += Number(allData[j].row[idxCOM] || 2.5);
+      sumTRA += Number(allData[j].row[idxTRA] || 2.5);
+      count++;
+    }
+    return count > 0 ? { com: sumCOM / count, tra: sumTRA / count } : { com: 2.5, tra: 2.5 };
+  }
 
-    // ✅ Trouver classe compatible avec LV2/OPT de l'élève
+  // Calculer les moyennes globales (cibles)
+  let globalSumCOM = 0, globalSumTRA = 0, globalCount = 0;
+  for (let j = 0; j < allData.length; j++) {
+    globalSumCOM += Number(allData[j].row[idxCOM] || 2.5);
+    globalSumTRA += Number(allData[j].row[idxTRA] || 2.5);
+    globalCount++;
+  }
+  const globalAvgCOM = globalCount > 0 ? globalSumCOM / globalCount : 2.5;
+  const globalAvgTRA = globalCount > 0 ? globalSumTRA / globalCount : 2.5;
+
+  // Collecter les élèves non assignés
+  const unassigned = [];
+  for (let i = 0; i < allData.length; i++) {
+    if (!String(allData[i].row[idxAssigned] || '').trim()) {
+      unassigned.push(i);
+    }
+  }
+
+  // Trier les non-assignés par profil extrême d'abord (COM=1 ou COM=4 en premier)
+  // pour que les profils les plus impactants soient placés quand il y a le plus de choix
+  unassigned.sort(function(a, b) {
+    const comA = Number(allData[a].row[idxCOM] || 2.5);
+    const comB = Number(allData[b].row[idxCOM] || 2.5);
+    const distA = Math.abs(comA - 2.5);
+    const distB = Math.abs(comB - 2.5);
+    return distB - distA; // Profils extrêmes en premier
+  });
+
+  for (let u = 0; u < unassigned.length; u++) {
+    const i = unassigned[u];
+    const item = allData[i];
+
     const lv2 = String(item.row[idxLV2] || '').trim().toUpperCase();
     const opt = String(item.row[idxOPT] || '').trim().toUpperCase();
     const disso = String(item.row[idxDISSO] || '').trim().toUpperCase();
     const nom = String(item.row[idxNom] || '');
+    const eleveCOM = Number(item.row[idxCOM] || 2.5);
+    const eleveTRA = Number(item.row[idxTRA] || 2.5);
 
     let targetClass = null;
+    let bestScore = Infinity;
 
-    // Trouver la classe la moins remplie qui propose cette LV2/OPT ET respecte DISSO
+    // Trouver la classe qui BÉNÉFICIE le plus de ce profil (rapproche la moyenne de la cible)
     for (const cls in (ctx.targets || {})) {
       const quotas = (ctx.quotas && ctx.quotas[cls]) || {};
       const current = classCounts[cls] || 0;
       const target = ctx.targets[cls] || 27;
 
-      // Vérifier qu'il reste de la place
       if (current >= target) continue;
 
-      // Vérifier compatibilité LV2 (LV2 universelles toujours compatibles)
+      // Vérifier compatibilité LV2
       let compatible = true;
-      if (lv2 && lv2Universelles.indexOf(lv2) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2) >= 0) {
+      if (lv2 && lv2Universelles.indexOf(lv2) === -1 && isKnownLV2(lv2)) {
         if (!quotas[lv2] || quotas[lv2] <= 0) compatible = false;
       }
 
       // Vérifier compatibilité OPT
-      if (opt && ['CHAV', 'LATIN', 'GREC'].indexOf(opt) >= 0) {
+      if (opt && isKnownOPT(opt)) {
         if (!quotas[opt] || quotas[opt] <= 0) compatible = false;
       }
 
-      // 🚫 NOUVEAU : Vérifier absence de conflits DISSO dans la classe cible
+      // Vérifier DISSO
       if (disso && compatible) {
         for (let j = 0; j < allData.length; j++) {
           if (i === j) continue;
           const otherAssigned = String(allData[j].row[idxAssigned] || '').trim();
           if (otherAssigned !== cls) continue;
-
           const otherDisso = String(allData[j].row[idxDISSO] || '').trim().toUpperCase();
           if (otherDisso === disso) {
-            compatible = false; // Conflit DISSO détecté !
-            logLine('INFO', '    ⚠️ ' + nom + ' (DISSO=' + disso + ') : Conflit détecté dans ' + cls + ', cherche autre classe...');
+            compatible = false;
             break;
           }
         }
       }
 
-      if (compatible) {
-        if (!targetClass || current < (classCounts[targetClass] || 0)) {
-          targetClass = cls;
-        }
+      if (!compatible) continue;
+
+      // SCORING INTELLIGENT : Combiner besoin en effectif + besoin en profil
+      const slotNeed = (target - current) / target; // 0..1 : besoin en place
+      const classAvg = getClassProfileAvg(cls);
+
+      // Écart de la classe par rapport à la cible APRÈS ajout de cet élève
+      const newAvgCOM = (classAvg.com * current + eleveCOM) / (current + 1);
+      const newAvgTRA = (classAvg.tra * current + eleveTRA) / (current + 1);
+      const profileGap = Math.abs(newAvgCOM - globalAvgCOM) + Math.abs(newAvgTRA - globalAvgTRA);
+
+      // Score combiné : on minimise l'écart de profil tout en favorisant les classes qui ont besoin de monde
+      const combinedScore = profileGap - slotNeed * 0.5;
+
+      if (combinedScore < bestScore) {
+        bestScore = combinedScore;
+        targetClass = cls;
       }
     }
 
     if (!targetClass) {
-      // Fallback : classe la moins remplie (ignorant quotas)
       targetClass = findLeastPopulatedClass_Phase3(allData, headersRef, ctx);
       logLine('WARN', '    ⚠️ ' + nom + ' : Aucune classe compatible trouvée, placement forcé dans ' + targetClass);
     }
@@ -226,11 +281,11 @@ function Phase3I_completeAndParity_LEGACY(ctx) {
     classCounts[targetClass] = (classCounts[targetClass] || 0) + 1;
     placed++;
 
-    // 📋 LOG détaillé du placement
     const logDetails = [];
     if (lv2) logDetails.push('LV2=' + lv2);
     if (opt) logDetails.push('OPT=' + opt);
     if (disso) logDetails.push('DISSO=' + disso);
+    logDetails.push('COM=' + eleveCOM);
     logLine('INFO', '    ✅ ' + nom + ' → ' + targetClass + ' (' + logDetails.join(', ') + ') [' + classCounts[targetClass] + '/' + (ctx.targets[targetClass] || 27) + ']');
   }
 
@@ -455,13 +510,13 @@ function canSwapForParity_Phase3(studentIdx, targetClass, allData, headers, ctx)
     const lv2Universelles = (ctx && ctx.lv2Universelles) || [];
     
     // Vérifier si la classe cible propose cette option (LV2 universelles toujours OK)
-    if (lv2 && lv2Universelles.indexOf(lv2) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2) >= 0) {
+    if (lv2 && lv2Universelles.indexOf(lv2) === -1 && isKnownLV2(lv2)) {
       if (!quotas[lv2] || quotas[lv2] <= 0) {
         return false; // Classe cible ne propose pas cette LV2
       }
     }
-    
-    if (opt && ['CHAV', 'LATIN'].indexOf(opt) >= 0) {
+
+    if (opt && isKnownOPT(opt)) {
       if (!quotas[opt] || quotas[opt] <= 0) {
         return false; // Classe cible ne propose pas cette option
       }

@@ -84,7 +84,7 @@ function Phase1I_dispatchOptionsLV2_BASEOPTI_V3(ctx) {
         const opt = String(row[idxOPT] || '').trim().toUpperCase();
 
         let match = false;
-        if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0) {
+        if (isKnownLV2(optName)) {
           match = (lv2 === optName);
         } else {
           match = (opt === optName);
@@ -479,7 +479,7 @@ function findClassWithoutCodeD_V3(data, headers, codeD, indicesWithD, eleveIdx, 
       const quotas = (ctx && ctx.quotas && ctx.quotas[cls]) || {};
       
       let canPlace = false;
-      if (eleveLV2 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(eleveLV2) >= 0) {
+      if (eleveLV2 && isKnownLV2(eleveLV2)) {
         // L'élève a une LV2 spécifique
         canPlace = (quotas[eleveLV2] !== undefined && quotas[eleveLV2] > 0);
       } else if (eleveOPT) {
@@ -554,7 +554,7 @@ function canPlaceInClass_V3(eleveIdx, targetClass, data, headers, excludeIdx, ct
     const quotas = ctx.quotas[targetClass] || {};
 
     // Si l'élève a une LV2 spécifique (ITA, ESP, ALL, PT)
-    if (eleveLV2 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(eleveLV2) >= 0) {
+    if (eleveLV2 && isKnownLV2(eleveLV2)) {
       // La classe cible doit proposer cette LV2
       if (quotas[eleveLV2] === undefined || quotas[eleveLV2] === 0) {
         return {
@@ -920,13 +920,94 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     swapsApplied++;
   }
 
+  // ===== HARMONY FIX (F5) : 3-WAY CYCLE SWAPS =====
+  // Quand les 2-way stagnent, essayer des rotations A→B, B→C, C→A
+  logLine('INFO', '  🔄 Phase 4 V3 : Lancement des swaps 3-voies...');
+  const max3Way = Math.min(100, Math.floor(maxSwaps * 0.2));
+  let swaps3Way = 0;
+
+  const classNames = Object.keys(byClass);
+  const idxAssignedP4 = headers.indexOf('_CLASS_ASSIGNED');
+  const idxMobiliteP4 = headers.indexOf('MOBILITE');
+  const idxFixeP4 = headers.indexOf('FIXE');
+
+  for (let iter3 = 0; iter3 < max3Way; iter3++) {
+    let bestGain3 = 1e-6;
+    let best3Way = null;
+
+    // Échantillonner des triplets de classes
+    for (let t = 0; t < Math.min(20, classNames.length * (classNames.length - 1)); t++) {
+      const c1 = classNames[Math.floor(Math.random() * classNames.length)];
+      const c2 = classNames[Math.floor(Math.random() * classNames.length)];
+      const c3 = classNames[Math.floor(Math.random() * classNames.length)];
+      if (c1 === c2 || c2 === c3 || c1 === c3) continue;
+
+      const errorBefore3 = calculateCompositeSwapScore_V3(data, headers, { [c1]: byClass[c1], [c2]: byClass[c2], [c3]: byClass[c3] }, targetDistribution, weights, null);
+
+      // Échantillonner 1 élève de chaque classe
+      for (let s = 0; s < 8; s++) {
+        const a = byClass[c1][Math.floor(Math.random() * byClass[c1].length)];
+        const b = byClass[c2][Math.floor(Math.random() * byClass[c2].length)];
+        const c = byClass[c3][Math.floor(Math.random() * byClass[c3].length)];
+
+        if (!a || !b || !c) continue;
+
+        // Vérifier mobilité
+        const mobA = String(data[a][idxMobiliteP4] || data[a][idxFixeP4] || '').toUpperCase();
+        const mobB = String(data[b][idxMobiliteP4] || data[b][idxFixeP4] || '').toUpperCase();
+        const mobC = String(data[c][idxMobiliteP4] || data[c][idxFixeP4] || '').toUpperCase();
+        if (mobA.includes('FIXE') || mobB.includes('FIXE') || mobC.includes('FIXE')) continue;
+
+        // Vérifier contraintes : A→c2, B→c3, C→c1
+        const checkA = canPlaceInClass_V3(a, c2, data, headers, b, ctx);
+        const checkB = canPlaceInClass_V3(b, c3, data, headers, c, ctx);
+        const checkC = canPlaceInClass_V3(c, c1, data, headers, a, ctx);
+        if (!checkA.ok || !checkB.ok || !checkC.ok) continue;
+
+        // Simuler la rotation
+        const tempByClass3 = {
+          [c1]: byClass[c1].map(x => x === a ? c : x),
+          [c2]: byClass[c2].map(x => x === b ? a : x),
+          [c3]: byClass[c3].map(x => x === c ? b : x)
+        };
+
+        const errorAfter3 = calculateCompositeSwapScore_V3(data, headers, tempByClass3, targetDistribution, weights, null);
+        const gain3 = errorBefore3 - errorAfter3;
+
+        if (gain3 > bestGain3) {
+          bestGain3 = gain3;
+          best3Way = { a, b, c, c1, c2, c3 };
+        }
+      }
+    }
+
+    if (!best3Way) break;
+
+    // Appliquer la rotation A→c2, B→c3, C→c1
+    const { a, b, c, c1, c2, c3 } = best3Way;
+    data[a][idxAssignedP4] = c2;
+    data[b][idxAssignedP4] = c3;
+    data[c][idxAssignedP4] = c1;
+
+    byClass[c1] = byClass[c1].filter(x => x !== a).concat([c]);
+    byClass[c2] = byClass[c2].filter(x => x !== b).concat([a]);
+    byClass[c3] = byClass[c3].filter(x => x !== c).concat([b]);
+
+    swaps3Way++;
+    swapsApplied++;
+  }
+
+  if (swaps3Way > 0) {
+    logLine('INFO', `  ✅ ${swaps3Way} swaps 3-voies appliqués (gain supplémentaire).`);
+  }
+
   // Finalisation
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
   copyBaseoptiToCache_V3(ctx);
   if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  logLine('INFO', `✅ PHASE 4 V3 (NAUTILUS) terminée : ${swapsApplied} swaps appliqués.`);
+  logLine('INFO', `✅ PHASE 4 V3 (NAUTILUS) terminée : ${swapsApplied} swaps appliqués (dont ${swaps3Way} 3-voies).`);
 
   // Note : le rapport d'audit n'est pas appelé ici car il dépend de métriques qui ne sont plus calculées.
   // La fonction retourne un statut simple.
@@ -1013,7 +1094,7 @@ function calculateParityError_V3(byClass, data, headers) {
  * Calcule le score composite d'une répartition (erreur totale à minimiser).
  */
 function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, swap) {
-  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
+  const criteria = HARMONY_CRITERIA;
   let totalError = 0;
 
   if (swap) { // Simulation rapide
@@ -1032,10 +1113,49 @@ function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistributi
   // Erreur de parité
   totalError += calculateParityError_V3(byClass, data, headers) * (weights.parity || 1.0);
 
-  // Erreurs d'harmonie
+  // Erreurs d'harmonie (distribution des scores 1-4)
   criteria.forEach(crit => {
     totalError += calculateHarmonyError_V3(byClass, data, headers, crit, targetDistribution) * (weights[crit.toLowerCase()] || 0.1);
   });
+
+  // HARMONY FIX : Ajouter pénalité pour têtes de classe et niv1 mal répartis
+  const idxCOM = headers.indexOf('COM');
+  const idxTRA = headers.indexOf('TRA');
+  const idxPART = headers.indexOf('PART');
+  const profileWeight = weights.profiles || 2.0;
+
+  if (idxCOM >= 0 && idxTRA >= 0) {
+    for (const cls in byClass) {
+      const indices = byClass[cls];
+      const clsSize = indices.length;
+      if (clsSize === 0) continue;
+
+      let nbTetes = 0, nbNiv1 = 0;
+      for (let k = 0; k < clsSize; k++) {
+        const com = Number(data[indices[k]][idxCOM] || 2.5);
+        const tra = Number(data[indices[k]][idxTRA] || 2.5);
+        const part = idxPART >= 0 ? Number(data[indices[k]][idxPART] || 2.5) : 2.5;
+        if (isHeadStudent(com, tra, part)) nbTetes++;
+        if (isNiv1Student(com, tra)) nbNiv1++;
+      }
+
+      // Cibles proportionnelles : chaque classe devrait avoir ~même ratio
+      const targetHeadMin = 2;
+      const targetHeadMax = Math.max(5, Math.ceil(clsSize * 0.2));
+      const targetNiv1Max = Math.max(4, Math.ceil(clsSize * 0.15));
+
+      // Pénalité asymétrique (manque de têtes = critique, excès de niv1 = critique)
+      if (nbTetes < targetHeadMin) {
+        totalError += Math.pow(targetHeadMin - nbTetes, 2) * profileWeight;
+      }
+      if (nbTetes > targetHeadMax) {
+        totalError += (nbTetes - targetHeadMax) * profileWeight * 0.5;
+      }
+      if (nbNiv1 > targetNiv1Max) {
+        totalError += Math.pow(nbNiv1 - targetNiv1Max, 2) * profileWeight;
+      }
+    }
+  }
 
   return totalError;
 }
@@ -1068,7 +1188,7 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
 
   studentsWithDisruption.sort((a, b) => b.disruptionScore - a.disruptionScore);
 
-  const topPercent = 0.4;
+  const topPercent = 0.6; // HARMONY FIX : Élargir le pool de 40% à 60%
   const poolSize = Math.max(10, Math.floor(studentsWithDisruption.length * topPercent));
   const candidateStudents = studentsWithDisruption.slice(0, poolSize);
 

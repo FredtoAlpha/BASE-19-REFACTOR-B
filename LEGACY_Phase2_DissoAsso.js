@@ -324,7 +324,7 @@ function findClassWithoutCodeD_LEGACY(allData, headers, codeD, indicesWithD, ele
       const quotas = (ctx && ctx.quotas && ctx.quotas[cls]) || {};
 
       let canPlace = false;
-      if (eleveLV2 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(eleveLV2) >= 0) {
+      if (eleveLV2 && isKnownLV2(eleveLV2)) {
         canPlace = (quotas[eleveLV2] !== undefined && quotas[eleveLV2] > 0);
       } else if (eleveOPT) {
         canPlace = (quotas[eleveOPT] !== undefined && quotas[eleveOPT] > 0);

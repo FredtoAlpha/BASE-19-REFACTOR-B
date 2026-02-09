@@ -97,6 +97,68 @@ function Phase4_Ultimate_Run(ctx) {
     }
   }
 
+  // 3b. HARMONY FIX (F5) : 3-WAY CYCLE SWAPS après convergence 2-way
+  logLine('INFO', '🔄 Lancement swaps 3-voies ULTIMATE...');
+  let swaps3WayU = 0;
+  const classNamesU = Object.keys(byClass);
+
+  for (let iter3 = 0; iter3 < 200; iter3++) {
+    let bestGain3U = 0.001;
+    let best3WayU = null;
+
+    for (let t = 0; t < 15; t++) {
+      const c1 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
+      const c2 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
+      const c3 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
+      if (c1 === c2 || c2 === c3 || c1 === c3) continue;
+      if (!byClass[c1].length || !byClass[c2].length || !byClass[c3].length) continue;
+
+      const scoreBefore3 = calculateScore_Ultimate(byClass[c1], allData, globalStats, c1, ctx) +
+                           calculateScore_Ultimate(byClass[c2], allData, globalStats, c2, ctx) +
+                           calculateScore_Ultimate(byClass[c3], allData, globalStats, c3, ctx);
+
+      for (let s = 0; s < 10; s++) {
+        const a = byClass[c1][Math.floor(Math.random() * byClass[c1].length)];
+        const b = byClass[c2][Math.floor(Math.random() * byClass[c2].length)];
+        const c = byClass[c3][Math.floor(Math.random() * byClass[c3].length)];
+        if (isFixed(allData[a]) || isFixed(allData[b]) || isFixed(allData[c])) continue;
+
+        // Vérifier contraintes : A→c2, B→c3, C→c1
+        if (!canSwapStudents_Ultimate(a, b, c1, c2, byClass[c1], byClass[c2], allData, headers, ctx)) continue;
+        if (!canSwapStudents_Ultimate(b, c, c2, c3, byClass[c2], byClass[c3], allData, headers, ctx)) continue;
+
+        // Simuler rotation
+        const tempC1 = byClass[c1].filter(x => x !== a).concat([c]);
+        const tempC2 = byClass[c2].filter(x => x !== b).concat([a]);
+        const tempC3 = byClass[c3].filter(x => x !== c).concat([b]);
+
+        const scoreAfter3 = calculateScore_Ultimate(tempC1, allData, globalStats, c1, ctx) +
+                            calculateScore_Ultimate(tempC2, allData, globalStats, c2, ctx) +
+                            calculateScore_Ultimate(tempC3, allData, globalStats, c3, ctx);
+
+        const gain3 = scoreBefore3 - scoreAfter3;
+        if (gain3 > bestGain3U) {
+          bestGain3U = gain3;
+          best3WayU = { a, b, c, c1, c2, c3 };
+        }
+      }
+    }
+
+    if (!best3WayU) break;
+
+    // Appliquer la rotation
+    const { a, b, c, c1, c2, c3 } = best3WayU;
+    byClass[c1] = byClass[c1].filter(x => x !== a).concat([c]);
+    byClass[c2] = byClass[c2].filter(x => x !== b).concat([a]);
+    byClass[c3] = byClass[c3].filter(x => x !== c).concat([b]);
+    swaps3WayU++;
+    swapsApplied++;
+  }
+
+  if (swaps3WayU > 0) {
+    logLine('INFO', `  ✅ ${swaps3WayU} swaps 3-voies ULTIMATE appliqués.`);
+  }
+
   // 4. SAUVEGARDE RÉELLE
   const saveResult = saveResults_Ultimate(ss, allData, byClass, headers);
 
@@ -112,10 +174,11 @@ function Phase4_Ultimate_Run(ctx) {
     logLine('INFO', '✅ Validation DISSO : Aucune duplication détectée');
   }
 
-  logLine('SUCCESS', `✅ ULTIMATE Terminé : ${swapsApplied} swaps chirurgicaux appliqués.`);
+  logLine('SUCCESS', `✅ ULTIMATE Terminé : ${swapsApplied} swaps (dont ${swaps3WayU} 3-voies).`);
   return {
     ok: true,
     swapsApplied: swapsApplied,
+    swaps3Way: swaps3WayU,
     saveResult: saveResult,
     validation: validationResult
   };
@@ -169,11 +232,14 @@ function calculateScore_Ultimate(indices, allData, globalStats, className, ctx) 
   score += Math.abs(ratioF - globalStats.ratioF) * 1000 * ULTIMATE_CONFIG.weights.parity;
 
   // --- 3. CRITÈRE DISTRIBUTION ACADÉMIQUE (Jules Codex) ---
+  // HARMONY FIX : Inclure PART et ABS dans le scoring (pas seulement COM/TRA)
   const avgCOM = students.reduce((acc, s) => acc + (s.COM || 2.5), 0) / total;
   const avgTRA = students.reduce((acc, s) => acc + (s.TRA || 2.5), 0) / total;
+  const avgPART = students.reduce((acc, s) => acc + (s.PART || 2.5), 0) / total;
 
   score += Math.abs(avgCOM - globalStats.avgCOM) * 100 * ULTIMATE_CONFIG.weights.distrib;
   score += Math.abs(avgTRA - globalStats.avgTRA) * 100 * ULTIMATE_CONFIG.weights.distrib;
+  score += Math.abs(avgPART - (globalStats.avgPART || 2.5)) * 50 * ULTIMATE_CONFIG.weights.distrib;
 
   return score;
 }
@@ -191,13 +257,14 @@ function findBestSwapBetween_Ultimate(cls1Name, cls2Name, allData, byClass, head
   let bestSwap = null;
   let maxGain = 0;
 
-  // Stochastic probing (15 random pairs)
-  for (let i = 0; i < 15; i++) {
+  // HARMONY FIX (F3) : Augmenter l'échantillonnage de 15x15=225 à 25x25=625
+  const sampleSize = Math.min(25, Math.max(idxList1.length, idxList2.length));
+  for (let i = 0; i < sampleSize; i++) {
     const i1 = idxList1[Math.floor(Math.random() * idxList1.length)];
     const s1 = allData[i1];
     if (isFixed(s1)) continue;
 
-    for (let j = 0; j < 15; j++) {
+    for (let j = 0; j < sampleSize; j++) {
       const i2 = idxList2[Math.floor(Math.random() * idxList2.length)];
       const s2 = allData[i2];
       if (isFixed(s2)) continue;
@@ -249,7 +316,7 @@ function loadAndClassifyData_Ultimate(ctx) {
   for (const classe in (ctx.quotas || {})) {
     const quotas = ctx.quotas[classe];
     for (const optName in quotas) {
-      if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0 && quotas[optName] > 0) {
+      if (isKnownLV2(optName) && quotas[optName] > 0) {
         lv2Counts[optName] = (lv2Counts[optName] || 0) + 1;
       }
     }
@@ -326,16 +393,18 @@ function loadAndClassifyData_Ultimate(ctx) {
  */
 function calculateGlobalStats_Ultimate(allData) {
   let total = allData.length;
-  if (total === 0) return { ratioF: 0.5, avgCOM: 2.5, avgTRA: 2.5 };
+  if (total === 0) return { ratioF: 0.5, avgCOM: 2.5, avgTRA: 2.5, avgPART: 2.5 };
 
   const nbFilles = allData.filter(s => s.sexe === 'F').length;
   const sumCOM = allData.reduce((sum, s) => sum + s.COM, 0);
   const sumTRA = allData.reduce((sum, s) => sum + s.TRA, 0);
+  const sumPART = allData.reduce((sum, s) => sum + (s.PART || 2.5), 0);
 
   return {
     ratioF: nbFilles / total,
     avgCOM: sumCOM / total,
-    avgTRA: sumTRA / total
+    avgTRA: sumTRA / total,
+    avgPART: sumPART / total
   };
 }
 
@@ -356,12 +425,73 @@ function findWorstClass_Ultimate(byClass, allData, globalStats, ctx) {
 }
 
 /**
- * Trouve une classe partenaire pour un swap
+ * Trouve la meilleure classe partenaire pour un swap.
+ * HARMONY FIX (F2) : Sélection ciblée au lieu de random.
+ * Choisit la classe dont le profil est le plus complémentaire
+ * (si worstClass manque de têtes, chercher celle qui en a trop, etc.)
  */
 function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
   const classes = Object.keys(byClass).filter(c => c !== worstClass);
   if (classes.length === 0) return null;
-  return classes[Math.floor(Math.random() * classes.length)];
+
+  const worstStudents = byClass[worstClass].map(i => allData[i]);
+  const worstTotal = worstStudents.length;
+  if (worstTotal === 0) return null;
+
+  const worstNbTetes = worstStudents.filter(s => s.isHead).length;
+  const worstNbNiv1 = worstStudents.filter(s => s.isNiv1).length;
+  const worstRatioF = worstStudents.filter(s => s.sexe === 'F').length / worstTotal;
+  const worstAvgCOM = worstStudents.reduce((s, st) => s + st.COM, 0) / worstTotal;
+
+  let bestPartner = null;
+  let bestComplementarity = -Infinity;
+
+  for (let c = 0; c < classes.length; c++) {
+    const cls = classes[c];
+    const clsStudents = byClass[cls].map(i => allData[i]);
+    const clsTotal = clsStudents.length;
+    if (clsTotal === 0) continue;
+
+    const clsNbTetes = clsStudents.filter(s => s.isHead).length;
+    const clsNbNiv1 = clsStudents.filter(s => s.isNiv1).length;
+    const clsRatioF = clsStudents.filter(s => s.sexe === 'F').length / clsTotal;
+    const clsAvgCOM = clsStudents.reduce((s, st) => s + st.COM, 0) / clsTotal;
+
+    // Complémentarité = les déficits de l'une sont les excès de l'autre
+    let comp = 0;
+
+    // Si worst manque de têtes et partner en a trop (ou vice-versa)
+    const teteDiff = (worstNbTetes - ULTIMATE_CONFIG.targets.headMin) - (clsNbTetes - ULTIMATE_CONFIG.targets.headMin);
+    comp += Math.abs(teteDiff) * 3;
+
+    // Si worst a trop de niv1 et partner en a peu (ou vice-versa)
+    const niv1Diff = (worstNbNiv1 - ULTIMATE_CONFIG.targets.niv1Max) - (clsNbNiv1 - ULTIMATE_CONFIG.targets.niv1Max);
+    comp += Math.abs(niv1Diff) * 3;
+
+    // Parité complémentaire
+    if ((worstRatioF > globalStats.ratioF && clsRatioF < globalStats.ratioF) ||
+        (worstRatioF < globalStats.ratioF && clsRatioF > globalStats.ratioF)) {
+      comp += 2;
+    }
+
+    // Moyenne COM complémentaire
+    if ((worstAvgCOM > globalStats.avgCOM && clsAvgCOM < globalStats.avgCOM) ||
+        (worstAvgCOM < globalStats.avgCOM && clsAvgCOM > globalStats.avgCOM)) {
+      comp += Math.abs(worstAvgCOM - clsAvgCOM) * 2;
+    }
+
+    if (comp > bestComplementarity) {
+      bestComplementarity = comp;
+      bestPartner = cls;
+    }
+  }
+
+  // 20% du temps on choisit quand même au hasard pour explorer (diversification)
+  if (Math.random() < 0.2) {
+    return classes[Math.floor(Math.random() * classes.length)];
+  }
+
+  return bestPartner;
 }
 
 /**
@@ -379,10 +509,35 @@ function canSwapStudents_Ultimate(idx1, idx2, cls1Name, cls2Name, idxList1, idxL
   const s1 = allData[idx1];
   const s2 = allData[idx2];
 
-  // Extraire LV2/OPT des élèves
+  // Extraire LV2/OPT/ASSO des élèves
   const idxLV2 = headers.indexOf('LV2');
   const idxOPT = headers.indexOf('OPT');
   const idxDISSO = headers.indexOf('DISSO');
+  const idxASSO = headers.indexOf('ASSO');
+
+  // HARMONY FIX : Vérifier ASSO - ne jamais séparer un groupe ASSO
+  if (idxASSO >= 0) {
+    const asso_s1 = String(s1.row[idxASSO] || '').trim().toUpperCase();
+    const asso_s2 = String(s2.row[idxASSO] || '').trim().toUpperCase();
+
+    if (asso_s1) {
+      // s1 fait partie d'un groupe ASSO, vérifier que ses pairs sont dans cls2
+      const pairsInCls1 = idxList1.filter(function(idx) {
+        if (idx === idx1) return false;
+        return String(allData[idx].row[idxASSO] || '').trim().toUpperCase() === asso_s1;
+      });
+      // Si des pairs restent dans cls1, on ne peut pas swapper s1 ailleurs
+      if (pairsInCls1.length > 0) return false;
+    }
+
+    if (asso_s2) {
+      const pairsInCls2 = idxList2.filter(function(idx) {
+        if (idx === idx2) return false;
+        return String(allData[idx].row[idxASSO] || '').trim().toUpperCase() === asso_s2;
+      });
+      if (pairsInCls2.length > 0) return false;
+    }
+  }
 
   // ✅ SAFETY CHECK: Vérifier que les colonnes critiques existent
   if (idxDISSO === -1) {
@@ -406,14 +561,14 @@ function canSwapStudents_Ultimate(idx1, idx2, cls1Name, cls2Name, idxList1, idxL
   // Un élève peut avoir LV2=ESP + OPT=CHAV en même temps !
   
   // Vérifier LV2 (LV2 universelles toujours compatibles)
-  if (lv2_s2 && lv2Universelles.indexOf(lv2_s2) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2_s2) >= 0) {
+  if (lv2_s2 && lv2Universelles.indexOf(lv2_s2) === -1 && isKnownLV2(lv2_s2)) {
     if (!quotas1[lv2_s2] || quotas1[lv2_s2] <= 0) {
       return false; // Classe cible ne propose pas cette LV2
     }
   }
-  
+
   // Vérifier OPT (indépendamment de LV2)
-  if (opt_s2 && ['CHAV', 'LATIN'].indexOf(opt_s2) >= 0) {
+  if (opt_s2 && isKnownOPT(opt_s2)) {
     if (!quotas1[opt_s2] || quotas1[opt_s2] <= 0) {
       return false; // Classe cible ne propose pas cette option
     }
@@ -435,14 +590,14 @@ function canSwapStudents_Ultimate(idx1, idx2, cls1Name, cls2Name, idxList1, idxL
   const quotas2 = (ctx && ctx.quotas && ctx.quotas[cls2Name]) || {};
   
   // Vérifier LV2 (LV2 universelles toujours compatibles)
-  if (lv2_s1 && lv2Universelles.indexOf(lv2_s1) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2_s1) >= 0) {
+  if (lv2_s1 && lv2Universelles.indexOf(lv2_s1) === -1 && isKnownLV2(lv2_s1)) {
     if (!quotas2[lv2_s1] || quotas2[lv2_s1] <= 0) {
       return false; // Classe cible ne propose pas cette LV2
     }
   }
-  
+
   // Vérifier OPT (indépendamment de LV2)
-  if (opt_s1 && ['CHAV', 'LATIN'].indexOf(opt_s1) >= 0) {
+  if (opt_s1 && isKnownOPT(opt_s1)) {
     if (!quotas2[opt_s1] || quotas2[opt_s1] <= 0) {
       return false; // Classe cible ne propose pas cette option
     }
