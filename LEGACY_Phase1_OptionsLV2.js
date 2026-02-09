@@ -121,7 +121,7 @@ function Phase1I_dispatchOptionsLV2_LEGACY(ctx) {
   for (const classe in (ctx.quotas || {})) {
     const quotas = ctx.quotas[classe];
     for (const optName in quotas) {
-      if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0) {
+      if (isKnownLV2(optName)) {
         if (quotas[optName] > 0) {
           lv2Counts[optName] = (lv2Counts[optName] || 0) + 1;
         }
@@ -178,12 +178,12 @@ function Phase1I_dispatchOptionsLV2_LEGACY(ctx) {
 
         let match = false;
         // 🌟 APPROCHE UNIVERSELLE : Ignorer les LV2 universelles (présentes dans toutes les classes)
-        if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0) {
+        if (isKnownLV2(optName)) {
           // Placer uniquement si LV2 "rare" (pas universelle)
           if (lv2Universelles.indexOf(optName) === -1) {
             match = (lv2 === optName);
           }
-        } else if (['CHAV', 'LATIN', 'GREC'].indexOf(optName) >= 0) {
+        } else if (isKnownOPT(optName)) {
           match = (opt === optName);
         }
 
@@ -200,7 +200,7 @@ function Phase1I_dispatchOptionsLV2_LEGACY(ctx) {
           }
           
           // Vérifier OPT (si l'élève en a une)
-          if (compatible && opt && ['CHAV', 'LATIN', 'GREC'].indexOf(opt) >= 0) {
+          if (compatible && opt && isKnownOPT(opt)) {
             // L'élève a une option → La classe doit la proposer
             if (!quotas[opt] || quotas[opt] <= 0) {
               compatible = false;

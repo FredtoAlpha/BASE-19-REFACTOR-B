@@ -234,7 +234,8 @@ function decideSexForSeat_V3(C, ctx, meta) {
 // ===================================================================
 
 /**
- * Sélectionne un élève du pool compatible avec la classe
+ * Sélectionne l'élève du pool qui RAPPROCHE le plus la classe de la moyenne globale.
+ * Version HARMONY : Placement intelligent par profil académique.
  *
  * @param {string} sex - 'F' ou 'M'
  * @param {Object} C - Classe courante
@@ -245,16 +246,56 @@ function pickStudentFromPool_V3(sex, C, ctx) {
   const pool = (sex === 'F') ? ctx.poolF : ctx.poolM;
   const data = ctx.data;
   const headers = ctx.headers;
+  const idxCOM = headers.indexOf('COM');
+  const idxTRA = headers.indexOf('TRA');
+  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
+
+  // Calculer la moyenne COM/TRA actuelle de la classe
+  let classSumCOM = 0, classSumTRA = 0, classCount = 0;
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][idxAssigned] || '').trim() === C.name) {
+      classSumCOM += Number(data[r][idxCOM] || 2.5);
+      classSumTRA += Number(data[r][idxTRA] || 2.5);
+      classCount++;
+    }
+  }
+  const classAvgCOM = classCount > 0 ? classSumCOM / classCount : 2.5;
+  const classAvgTRA = classCount > 0 ? classSumTRA / classCount : 2.5;
+
+  // Calculer la moyenne globale (cible)
+  let globalSumCOM = 0, globalSumTRA = 0, globalCount = 0;
+  for (let r = 1; r < data.length; r++) {
+    globalSumCOM += Number(data[r][idxCOM] || 2.5);
+    globalSumTRA += Number(data[r][idxTRA] || 2.5);
+    globalCount++;
+  }
+  const globalAvgCOM = globalCount > 0 ? globalSumCOM / globalCount : 2.5;
+  const globalAvgTRA = globalCount > 0 ? globalSumTRA / globalCount : 2.5;
+
+  // Trouver le candidat compatible qui rapproche le plus la classe de la cible
+  let bestCandidate = null;
+  let bestGap = Infinity;
 
   for (let i = 0; i < pool.length; i++) {
     const eleveIdx = pool[i];
     const check = canPlaceInClass_V3(eleveIdx, C.name, data, headers, undefined, ctx);
+    if (!check.ok) continue;
 
-    if (check.ok) {
-      return { eleve: data[eleveIdx], eleveIdx: eleveIdx, poolIndex: i };
+    const eleveCOM = Number(data[eleveIdx][idxCOM] || 2.5);
+    const eleveTRA = Number(data[eleveIdx][idxTRA] || 2.5);
+
+    // Calculer l'écart après ajout de cet élève
+    const newAvgCOM = (classSumCOM + eleveCOM) / (classCount + 1);
+    const newAvgTRA = (classSumTRA + eleveTRA) / (classCount + 1);
+    const gap = Math.abs(newAvgCOM - globalAvgCOM) + Math.abs(newAvgTRA - globalAvgTRA);
+
+    if (gap < bestGap) {
+      bestGap = gap;
+      bestCandidate = { eleve: data[eleveIdx], eleveIdx: eleveIdx, poolIndex: i };
     }
   }
-  return null;
+
+  return bestCandidate;
 }
 
 // ===================================================================

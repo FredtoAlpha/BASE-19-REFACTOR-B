@@ -27,7 +27,7 @@ function calculerEtRemplirMobilite_LEGACY(ctx) {
   for (const classe in (ctx.quotas || {})) {
     const quotas = ctx.quotas[classe];
     for (const optName in quotas) {
-      if (['ITA', 'ESP', 'ALL', 'PT'].indexOf(optName) >= 0 && quotas[optName] > 0) {
+      if (isKnownLV2(optName) && quotas[optName] > 0) {
         lv2Counts[optName] = (lv2Counts[optName] || 0) + 1;
       }
     }
@@ -101,8 +101,8 @@ function calculerEtRemplirMobilite_LEGACY(ctx) {
   logLine('INFO', '  📊 Offres par classe :');
   for (const classe in (ctx.quotas || {})) {
     const q = ctx.quotas[classe];
-    const lv2 = Object.keys(q).filter(k => ['ESP', 'ITA', 'ALL', 'PT'].indexOf(k) >= 0);
-    const opt = Object.keys(q).filter(k => ['CHAV', 'LATIN', 'GREC'].indexOf(k) >= 0);
+    const lv2 = Object.keys(q).filter(k => isKnownLV2(k));
+    const opt = Object.keys(q).filter(k => isKnownOPT(k));
     logLine('INFO', '    • ' + classe + ' : LV2={' + (lv2.join(', ') || 'aucune') + '}, OPT={' + (opt.join(', ') || 'aucune') + '}');
   }
   
@@ -192,14 +192,14 @@ function calculerMobiliteEleve_LEGACY(row, headers, allData, ctx) {
     
     // Vérifier LV2 (LV2 universelles toujours compatibles)
     const lv2Universelles = (ctx && ctx.lv2Universelles) || [];
-    if (lv2 && lv2Universelles.indexOf(lv2) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2) >= 0) {
+    if (lv2 && lv2Universelles.indexOf(lv2) === -1 && isKnownLV2(lv2)) {
       if (!quotas[lv2] || quotas[lv2] <= 0) {
         compatible = false;
       }
     }
-    
+
     // Vérifier OPT (indépendamment)
-    if (opt && ['CHAV', 'LATIN', 'GREC'].indexOf(opt) >= 0) {
+    if (opt && isKnownOPT(opt)) {
       if (!quotas[opt] || quotas[opt] <= 0) {
         compatible = false;
       }
@@ -272,10 +272,10 @@ function calculerMobiliteGroupe_LEGACY(codeASSO, indicesGroupe, allData, headers
       
       // LV2 universelles toujours compatibles
       const lv2Universelles = (ctx && ctx.lv2Universelles) || [];
-      if (lv2 && lv2Universelles.indexOf(lv2) === -1 && ['ITA', 'ESP', 'ALL', 'PT'].indexOf(lv2) >= 0) {
+      if (lv2 && lv2Universelles.indexOf(lv2) === -1 && isKnownLV2(lv2)) {
         if (!quotas[lv2] || quotas[lv2] <= 0) compatible = false;
       }
-      if (opt && ['CHAV', 'LATIN', 'GREC'].indexOf(opt) >= 0) {
+      if (opt && isKnownOPT(opt)) {
         if (!quotas[opt] || quotas[opt] <= 0) compatible = false;
       }
       
