@@ -15,32 +15,67 @@
  * ===================================================================
  */
 
-// Configuration Ajustable
-const ULTIMATE_CONFIG = {
-  maxSwaps: 2000,           // Nombre max d'échanges testés
-  stagnationLimit: 50,      // Arrêt si pas d'amélioration après N tentatives
+// U3 REPLICANT : Configuration par défaut, surchargeable via ctx.ultimateConfig
+const ULTIMATE_CONFIG_DEFAULTS = {
+  maxSwaps: 2000,
+  stagnationLimit: 50,
   weights: {
-    distrib: 5.0,           // Poids de la courbe de Gauss (Note moyenne)
-    parity: 4.0,            // Poids de la parité F/M
-    profiles: 10.0,         // Poids CRITIQUE des profils (Têtes/Niv1)
-    friends: 1000.0         // Poids CRITIQUE des amitiés (ASSO/DISSO)
+    distrib: 5.0,
+    parity: 4.0,
+    profiles: 10.0,
+    friends: 1000.0
   },
   targets: {
-    headMin: 2,             // Min têtes de classe par classe
-    headMax: 5,             // Max têtes de classe par classe
-    niv1Max: 4,             // Max élèves en difficulté par classe
+    headMin: 2,
+    headMax: 5,
+    niv1Max: 4,
     niv1Min: 0
   }
 };
 
+// Config live fusionnée avec les overrides du contexte
+// Permet de modifier les poids depuis l'UI sans toucher au code
+function getUltimateConfig_(ctx) {
+  var cfg = JSON.parse(JSON.stringify(ULTIMATE_CONFIG_DEFAULTS));
+  var overrides = (ctx && ctx.ultimateConfig) || {};
+  if (overrides.maxSwaps !== undefined) cfg.maxSwaps = overrides.maxSwaps;
+  if (overrides.stagnationLimit !== undefined) cfg.stagnationLimit = overrides.stagnationLimit;
+  if (overrides.weights) {
+    for (var k in overrides.weights) {
+      cfg.weights[k] = overrides.weights[k];
+    }
+  }
+  if (overrides.targets) {
+    for (var k in overrides.targets) {
+      cfg.targets[k] = overrides.targets[k];
+    }
+  }
+  return cfg;
+}
+
+// Compat : ULTIMATE_CONFIG reste accessible globalement comme alias
+var ULTIMATE_CONFIG = ULTIMATE_CONFIG_DEFAULTS;
+
 /**
  * Point d'entrée principal appelé par le Pipeline OPTI ou LEGACY
+ *
+ * REPLICANT VERSION :
+ * - U1: Sampling priorisé par disruption (top candidats, pas brute-force)
+ * - U2: PART dans la complémentarité du partenaire
+ * - U3: Config dynamique fusionnée depuis ctx.ultimateConfig
+ * - N3: PRNG seedable pour reproductibilité
+ *
  * @param {Object} ctx - Contexte de l'optimisation
  * @returns {Object} Résultat d'optimisation
  */
 function Phase4_Ultimate_Run(ctx) {
   const ss = ctx.ss || SpreadsheetApp.getActiveSpreadsheet();
-  logLine('INFO', '🚀 Lancement OPTIMUM PRIME ULTIMATE...');
+  const config = getUltimateConfig_(ctx);
+  const rng = createRNG(ctx.seed || null);
+
+  logLine('INFO', '🚀 Lancement OPTIMUM PRIME ULTIMATE (REPLICANT)...');
+  logLine('INFO', '🎲 Seed: ' + rng.seed);
+  logLine('INFO', '⚖️ Config: ' + JSON.stringify(config.weights));
 
   // 1. CHARGEMENT ET CLASSIFICATION
   const dataResult = loadAndClassifyData_Ultimate(ctx);
@@ -54,28 +89,63 @@ function Phase4_Ultimate_Run(ctx) {
 
   // 2. STATISTIQUES GLOBALES
   const globalStats = calculateGlobalStats_Ultimate(allData);
-  logLine('INFO', `🎯 Cibles : Ratio F=${(globalStats.ratioF*100).toFixed(1)}%, Moyenne COM=${globalStats.avgCOM.toFixed(2)}`);
+  logLine('INFO', `🎯 Cibles : Ratio F=${(globalStats.ratioF*100).toFixed(1)}%, Moyenne COM=${globalStats.avgCOM.toFixed(2)}, PART=${globalStats.avgPART.toFixed(2)}`);
 
-  // 3. BOUCLE D'OPTIMISATION "SMART HILL CLIMBING"
+  // U1: Pré-calculer les scores de disruption pour chaque élève
+  function computeDisruptionScores() {
+    const scores = [];
+    for (const cls in byClass) {
+      const indices = byClass[cls];
+      const students = indices.map(i => allData[i]);
+      const total = students.length;
+      if (total <= 1) continue;
+
+      // Moyenne de la classe
+      const avgCOM = students.reduce((s, st) => s + st.COM, 0) / total;
+      const avgTRA = students.reduce((s, st) => s + st.TRA, 0) / total;
+
+      for (let k = 0; k < indices.length; k++) {
+        const st = allData[indices[k]];
+        if (isFixed(st)) continue;
+
+        // Disruption = distance du profil de l'élève au profil moyen de sa classe
+        const dist = Math.abs(st.COM - avgCOM) + Math.abs(st.TRA - avgTRA) +
+                     Math.abs((st.PART || 2.5) - globalStats.avgPART) * 0.5;
+
+        // Bonus si profil extrême (tête dans classe à trop de têtes, etc.)
+        let profileBonus = 0;
+        const nbTetes = students.filter(s => s.isHead).length;
+        const nbNiv1 = students.filter(s => s.isNiv1).length;
+        if (st.isHead && nbTetes > config.targets.headMax) profileBonus += 2;
+        if (st.isNiv1 && nbNiv1 > config.targets.niv1Max) profileBonus += 2;
+
+        scores.push({ idx: indices[k], cls: cls, score: dist + profileBonus });
+      }
+    }
+    scores.sort((a, b) => b.score - a.score);
+    return scores;
+  }
+
+  // 3. BOUCLE D'OPTIMISATION
   let swapsApplied = 0;
   let stagnationCount = 0;
 
-  for (let iter = 0; iter < ULTIMATE_CONFIG.maxSwaps; iter++) {
+  for (let iter = 0; iter < config.maxSwaps; iter++) {
 
-    // A. Identifier la classe la plus "malade" (Score le plus élevé)
+    // A. Identifier la classe la plus "malade"
     const worstClassKey = findWorstClass_Ultimate(byClass, allData, globalStats, ctx);
-    if (!worstClassKey) break; // Tout est parfait !
+    if (!worstClassKey) break;
 
-    // B. Identifier une classe partenaire (Le "Médecin")
-    const partnerClassKey = findPartnerClass_Ultimate(worstClassKey, byClass, allData, globalStats);
+    // B. Trouver partenaire complémentaire (U2: avec PART)
+    const partnerClassKey = findPartnerClass_Ultimate(worstClassKey, byClass, allData, globalStats, rng);
     if (!partnerClassKey) {
       stagnationCount++;
-      if(stagnationCount > 10) break;
+      if (stagnationCount > 10) break;
       continue;
     }
 
-    // C. Chercher le meilleur swap "Chirurgical"
-    const bestSwap = findBestSwapBetween_Ultimate(worstClassKey, partnerClassKey, allData, byClass, headers, globalStats, ctx);
+    // C. U1: Sampling priorisé — sélectionner les candidats les plus perturbants
+    const bestSwap = findBestSwapPrioritized_Ultimate(worstClassKey, partnerClassKey, allData, byClass, headers, globalStats, ctx, rng, config);
 
     // D. Appliquer si gain positif
     if (bestSwap && bestSwap.gain > 0.0001) {
@@ -83,7 +153,6 @@ function Phase4_Ultimate_Run(ctx) {
       swapsApplied++;
       stagnationCount = 0;
 
-      // 📋 LOG détaillé de chaque swap
       if (swapsApplied % 10 === 0 || swapsApplied <= 5) {
         logLine('INFO', `⚡ Swap #${swapsApplied}: ${bestSwap.reason} (Gain: ${bestSwap.gain.toFixed(4)})`);
       }
@@ -91,14 +160,14 @@ function Phase4_Ultimate_Run(ctx) {
       stagnationCount++;
     }
 
-    if (stagnationCount >= ULTIMATE_CONFIG.stagnationLimit) {
+    if (stagnationCount >= config.stagnationLimit) {
       logLine('INFO', '🛑 Convergence atteinte (Stagnation).');
       break;
     }
   }
 
-  // 3b. HARMONY FIX (F5) : 3-WAY CYCLE SWAPS après convergence 2-way
-  logLine('INFO', '🔄 Lancement swaps 3-voies ULTIMATE...');
+  // 3b. 3-WAY CYCLE SWAPS avec RNG seedable
+  logLine('INFO', '🔄 Lancement swaps 3-voies ULTIMATE (REPLICANT)...');
   let swaps3WayU = 0;
   const classNamesU = Object.keys(byClass);
 
@@ -107,9 +176,9 @@ function Phase4_Ultimate_Run(ctx) {
     let best3WayU = null;
 
     for (let t = 0; t < 15; t++) {
-      const c1 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
-      const c2 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
-      const c3 = classNamesU[Math.floor(Math.random() * classNamesU.length)];
+      const c1 = rng.pick(classNamesU);
+      const c2 = rng.pick(classNamesU);
+      const c3 = rng.pick(classNamesU);
       if (c1 === c2 || c2 === c3 || c1 === c3) continue;
       if (!byClass[c1].length || !byClass[c2].length || !byClass[c3].length) continue;
 
@@ -118,9 +187,9 @@ function Phase4_Ultimate_Run(ctx) {
                            calculateScore_Ultimate(byClass[c3], allData, globalStats, c3, ctx);
 
       for (let s = 0; s < 10; s++) {
-        const a = byClass[c1][Math.floor(Math.random() * byClass[c1].length)];
-        const b = byClass[c2][Math.floor(Math.random() * byClass[c2].length)];
-        const c = byClass[c3][Math.floor(Math.random() * byClass[c3].length)];
+        const a = rng.pick(byClass[c1]);
+        const b = rng.pick(byClass[c2]);
+        const c = rng.pick(byClass[c3]);
         if (isFixed(allData[a]) || isFixed(allData[b]) || isFixed(allData[c])) continue;
 
         // Vérifier contraintes : A→c2, B→c3, C→c1
@@ -174,11 +243,12 @@ function Phase4_Ultimate_Run(ctx) {
     logLine('INFO', '✅ Validation DISSO : Aucune duplication détectée');
   }
 
-  logLine('SUCCESS', `✅ ULTIMATE Terminé : ${swapsApplied} swaps (dont ${swaps3WayU} 3-voies).`);
+  logLine('SUCCESS', `✅ ULTIMATE REPLICANT Terminé : ${swapsApplied} swaps (dont ${swaps3WayU} 3-voies). Seed: ${rng.seed}`);
   return {
     ok: true,
     swapsApplied: swapsApplied,
     swaps3Way: swaps3WayU,
+    seed: rng.seed,
     saveResult: saveResult,
     validation: validationResult
   };
@@ -245,11 +315,40 @@ function calculateScore_Ultimate(indices, allData, globalStats, className, ctx) 
 }
 
 /**
- * Identifie le meilleur swap entre deux classes
+ * U1 REPLICANT : Sampling priorisé par disruption.
+ * Au lieu de brute-force random, on sélectionne les élèves les plus "déplacés"
+ * dans chaque classe et on ne teste que ceux-là.
  */
-function findBestSwapBetween_Ultimate(cls1Name, cls2Name, allData, byClass, headers, globalStats, ctx) {
+function findBestSwapPrioritized_Ultimate(cls1Name, cls2Name, allData, byClass, headers, globalStats, ctx, rng, config) {
   const idxList1 = byClass[cls1Name];
   const idxList2 = byClass[cls2Name];
+
+  // Calculer les profils cibles
+  const avgCls1 = allData.filter((s, i) => idxList1.indexOf(i) >= 0).reduce((acc, s) => acc + s.COM, 0) / idxList1.length;
+  const avgCls2 = allData.filter((s, i) => idxList2.indexOf(i) >= 0).reduce((acc, s) => acc + s.TRA, 0) / idxList2.length;
+
+  // Trier par disruption (distance au profil moyen de leur classe)
+  function sortByDisruption(indices) {
+    const total = indices.length;
+    const students = indices.map(i => allData[i]);
+    const avgCOM = students.reduce((s, st) => s + st.COM, 0) / total;
+    const avgTRA = students.reduce((s, st) => s + st.TRA, 0) / total;
+    const avgPART = students.reduce((s, st) => s + (st.PART || 2.5), 0) / total;
+
+    return indices.slice().sort(function(a, b) {
+      var distA = Math.abs(allData[a].COM - avgCOM) + Math.abs(allData[a].TRA - avgTRA) + Math.abs((allData[a].PART || 2.5) - avgPART) * 0.5;
+      var distB = Math.abs(allData[b].COM - avgCOM) + Math.abs(allData[b].TRA - avgTRA) + Math.abs((allData[b].PART || 2.5) - avgPART) * 0.5;
+      return distB - distA; // Plus perturbant en premier
+    }).filter(i => !isFixed(allData[i]));
+  }
+
+  // Prendre les top 60% les plus perturbants dans chaque classe
+  const sorted1 = sortByDisruption(idxList1);
+  const sorted2 = sortByDisruption(idxList2);
+  const topCount1 = Math.max(5, Math.ceil(sorted1.length * 0.6));
+  const topCount2 = Math.max(5, Math.ceil(sorted2.length * 0.6));
+  const candidates1 = sorted1.slice(0, topCount1);
+  const candidates2 = sorted2.slice(0, topCount2);
 
   const scoreBefore = calculateScore_Ultimate(idxList1, allData, globalStats, cls1Name, ctx) +
                       calculateScore_Ultimate(idxList2, allData, globalStats, cls2Name, ctx);
@@ -257,17 +356,14 @@ function findBestSwapBetween_Ultimate(cls1Name, cls2Name, allData, byClass, head
   let bestSwap = null;
   let maxGain = 0;
 
-  // HARMONY FIX (F3) : Augmenter l'échantillonnage de 15x15=225 à 25x25=625
-  const sampleSize = Math.min(25, Math.max(idxList1.length, idxList2.length));
-  for (let i = 0; i < sampleSize; i++) {
-    const i1 = idxList1[Math.floor(Math.random() * idxList1.length)];
+  // Tester les paires priorisées (top candidats seulement)
+  for (let i = 0; i < candidates1.length; i++) {
+    const i1 = candidates1[i];
     const s1 = allData[i1];
-    if (isFixed(s1)) continue;
 
-    for (let j = 0; j < sampleSize; j++) {
-      const i2 = idxList2[Math.floor(Math.random() * idxList2.length)];
+    for (let j = 0; j < candidates2.length; j++) {
+      const i2 = candidates2[j];
       const s2 = allData[i2];
-      if (isFixed(s2)) continue;
 
       // ✅ BUG #5 CORRECTION : Vérifier compatibilité LV2/OPT AVANT swap
       if (!canSwapStudents_Ultimate(i1, i2, cls1Name, cls2Name, idxList1, idxList2, allData, headers, ctx)) {
@@ -426,11 +522,10 @@ function findWorstClass_Ultimate(byClass, allData, globalStats, ctx) {
 
 /**
  * Trouve la meilleure classe partenaire pour un swap.
- * HARMONY FIX (F2) : Sélection ciblée au lieu de random.
- * Choisit la classe dont le profil est le plus complémentaire
- * (si worstClass manque de têtes, chercher celle qui en a trop, etc.)
+ * REPLICANT (F2+U2) : Complémentarité enrichie avec PART + RNG seedable.
  */
-function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
+function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats, rng) {
+  var _rng = rng || { next: Math.random, pick: function(a) { return a[Math.floor(Math.random() * a.length)]; } };
   const classes = Object.keys(byClass).filter(c => c !== worstClass);
   if (classes.length === 0) return null;
 
@@ -442,6 +537,8 @@ function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
   const worstNbNiv1 = worstStudents.filter(s => s.isNiv1).length;
   const worstRatioF = worstStudents.filter(s => s.sexe === 'F').length / worstTotal;
   const worstAvgCOM = worstStudents.reduce((s, st) => s + st.COM, 0) / worstTotal;
+  // U2: Ajouter PART à la complémentarité
+  const worstAvgPART = worstStudents.reduce((s, st) => s + (st.PART || 2.5), 0) / worstTotal;
 
   let bestPartner = null;
   let bestComplementarity = -Infinity;
@@ -456,15 +553,15 @@ function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
     const clsNbNiv1 = clsStudents.filter(s => s.isNiv1).length;
     const clsRatioF = clsStudents.filter(s => s.sexe === 'F').length / clsTotal;
     const clsAvgCOM = clsStudents.reduce((s, st) => s + st.COM, 0) / clsTotal;
+    const clsAvgPART = clsStudents.reduce((s, st) => s + (st.PART || 2.5), 0) / clsTotal;
 
-    // Complémentarité = les déficits de l'une sont les excès de l'autre
     let comp = 0;
 
-    // Si worst manque de têtes et partner en a trop (ou vice-versa)
+    // Têtes de classe croisées
     const teteDiff = (worstNbTetes - ULTIMATE_CONFIG.targets.headMin) - (clsNbTetes - ULTIMATE_CONFIG.targets.headMin);
     comp += Math.abs(teteDiff) * 3;
 
-    // Si worst a trop de niv1 et partner en a peu (ou vice-versa)
+    // Niv1 croisés
     const niv1Diff = (worstNbNiv1 - ULTIMATE_CONFIG.targets.niv1Max) - (clsNbNiv1 - ULTIMATE_CONFIG.targets.niv1Max);
     comp += Math.abs(niv1Diff) * 3;
 
@@ -474,10 +571,16 @@ function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
       comp += 2;
     }
 
-    // Moyenne COM complémentaire
+    // COM complémentaire
     if ((worstAvgCOM > globalStats.avgCOM && clsAvgCOM < globalStats.avgCOM) ||
         (worstAvgCOM < globalStats.avgCOM && clsAvgCOM > globalStats.avgCOM)) {
       comp += Math.abs(worstAvgCOM - clsAvgCOM) * 2;
+    }
+
+    // U2: PART complémentaire
+    if ((worstAvgPART > (globalStats.avgPART || 2.5) && clsAvgPART < (globalStats.avgPART || 2.5)) ||
+        (worstAvgPART < (globalStats.avgPART || 2.5) && clsAvgPART > (globalStats.avgPART || 2.5))) {
+      comp += Math.abs(worstAvgPART - clsAvgPART) * 1.5;
     }
 
     if (comp > bestComplementarity) {
@@ -486,9 +589,9 @@ function findPartnerClass_Ultimate(worstClass, byClass, allData, globalStats) {
     }
   }
 
-  // 20% du temps on choisit quand même au hasard pour explorer (diversification)
-  if (Math.random() < 0.2) {
-    return classes[Math.floor(Math.random() * classes.length)];
+  // 20% du temps : exploration aléatoire via RNG seedable
+  if (_rng.next() < 0.2) {
+    return _rng.pick(classes);
   }
 
   return bestPartner;
