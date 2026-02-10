@@ -59,11 +59,12 @@ var ULTIMATE_CONFIG = ULTIMATE_CONFIG_DEFAULTS;
 /**
  * Point d'entrée principal appelé par le Pipeline OPTI ou LEGACY
  *
- * REPLICANT VERSION :
+ * MULTI-RESTART VERSION :
  * - U1: Sampling priorisé par disruption (top candidats, pas brute-force)
  * - U2: PART dans la complémentarité du partenaire
  * - U3: Config dynamique fusionnée depuis ctx.ultimateConfig
  * - N3: PRNG seedable pour reproductibilité
+ * - MR: Multi-restart (5 seeds, garde le meilleur résultat)
  *
  * @param {Object} ctx - Contexte de l'optimisation
  * @returns {Object} Résultat d'optimisation
@@ -71,72 +72,107 @@ var ULTIMATE_CONFIG = ULTIMATE_CONFIG_DEFAULTS;
 function Phase4_Ultimate_Run(ctx) {
   const ss = ctx.ss || SpreadsheetApp.getActiveSpreadsheet();
   const config = getUltimateConfig_(ctx);
-  const rng = createRNG(ctx.seed || null);
+  const mrConfig = MULTI_RESTART_CONFIG;
+  const maxRestarts = mrConfig.maxRestarts;
 
-  logLine('INFO', '🚀 Lancement OPTIMUM PRIME ULTIMATE (REPLICANT)...');
-  logLine('INFO', '🎲 Seed: ' + rng.seed);
+  logLine('INFO', '🚀 Lancement OPTIMUM PRIME ULTIMATE (MULTI-RESTART)...');
   logLine('INFO', '⚖️ Config: ' + JSON.stringify(config.weights));
+  logLine('INFO', `🔁 Multi-restart : ${maxRestarts} seeds`);
 
-  // 1. CHARGEMENT ET CLASSIFICATION
+  // 1. CHARGEMENT ET CLASSIFICATION (une seule fois)
   const dataResult = loadAndClassifyData_Ultimate(ctx);
   if (!dataResult.ok) {
     logLine('ERROR', '❌ Échec du chargement des données ULTIMATE');
     return { ok: false, message: 'Erreur chargement données' };
   }
 
-  let { allData, byClass, headers } = dataResult;
-  logLine('INFO', `📊 Chargement OK : ${allData.length} élèves répartis en ${Object.keys(byClass).length} classes.`);
+  const { allData, byClass: originalByClass, headers } = dataResult;
+  logLine('INFO', `📊 Chargement OK : ${allData.length} élèves répartis en ${Object.keys(originalByClass).length} classes.`);
 
-  // 2. STATISTIQUES GLOBALES
+  // 2. STATISTIQUES GLOBALES (invariantes entre restarts)
   const globalStats = calculateGlobalStats_Ultimate(allData);
   logLine('INFO', `🎯 Cibles : Ratio F=${(globalStats.ratioF*100).toFixed(1)}%, Moyenne COM=${globalStats.avgCOM.toFixed(2)}, PART=${globalStats.avgPART.toFixed(2)}`);
 
-  // U1: Pré-calculer les scores de disruption pour chaque élève
-  function computeDisruptionScores() {
-    const scores = [];
+  // ===== MULTI-RESTART LOOP =====
+  let bestByClass = null;
+  let bestScore = Infinity;
+  let bestSwaps = 0;
+  let bestSwaps3Way = 0;
+  let bestSeed = 0;
+
+  for (let restart = 0; restart < maxRestarts; restart++) {
+    const seed = ctx.seed ? ctx.seed + restart * mrConfig.seedSpacing : restart * mrConfig.seedSpacing;
+    const rng = createRNG(seed);
+
+    // Copie indépendante de byClass pour ce restart
+    const byClass = snapshotByClass_(originalByClass);
+
+    logLine('INFO', `  🔁 Restart ${restart + 1}/${maxRestarts} (seed=${seed})`);
+
+    // Exécuter le coeur du moteur
+    const result = runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx, config, rng);
+
+    // Calculer le score global pour comparer
+    let totalScore = 0;
     for (const cls in byClass) {
-      const indices = byClass[cls];
-      const students = indices.map(i => allData[i]);
-      const total = students.length;
-      if (total <= 1) continue;
-
-      // Moyenne de la classe
-      const avgCOM = students.reduce((s, st) => s + st.COM, 0) / total;
-      const avgTRA = students.reduce((s, st) => s + st.TRA, 0) / total;
-
-      for (let k = 0; k < indices.length; k++) {
-        const st = allData[indices[k]];
-        if (isFixed(st)) continue;
-
-        // Disruption = distance du profil de l'élève au profil moyen de sa classe
-        const dist = Math.abs(st.COM - avgCOM) + Math.abs(st.TRA - avgTRA) +
-                     Math.abs((st.PART || 2.5) - globalStats.avgPART) * 0.5;
-
-        // Bonus si profil extrême (tête dans classe à trop de têtes, etc.)
-        let profileBonus = 0;
-        const nbTetes = students.filter(s => s.isHead).length;
-        const nbNiv1 = students.filter(s => s.isNiv1).length;
-        if (st.isHead && nbTetes > config.targets.headMax) profileBonus += 2;
-        if (st.isNiv1 && nbNiv1 > config.targets.niv1Max) profileBonus += 2;
-
-        scores.push({ idx: indices[k], cls: cls, score: dist + profileBonus });
-      }
+      totalScore += calculateScore_Ultimate(byClass[cls], allData, globalStats, cls, ctx);
     }
-    scores.sort((a, b) => b.score - a.score);
-    return scores;
+
+    logLine('INFO', `    📊 Score=${totalScore.toFixed(2)}, swaps=${result.swapsApplied}+${result.swaps3Way}(3-way)`);
+
+    if (totalScore < bestScore) {
+      bestScore = totalScore;
+      bestByClass = snapshotByClass_(byClass);
+      bestSwaps = result.swapsApplied;
+      bestSwaps3Way = result.swaps3Way;
+      bestSeed = seed;
+      logLine('INFO', `    ⭐ Nouveau meilleur ! (score=${bestScore.toFixed(2)})`);
+    }
   }
 
-  // 3. BOUCLE D'OPTIMISATION
+  logLine('INFO', `📊 Meilleur restart : seed=${bestSeed}, score=${bestScore.toFixed(2)}, swaps=${bestSwaps}+${bestSwaps3Way}(3-way)`);
+
+  // 4. SAUVEGARDE DU MEILLEUR RÉSULTAT
+  const saveResult = saveResults_Ultimate(ss, allData, bestByClass, headers);
+
+  // 5. VALIDATION FINALE
+  const validationResult = validateDISSOConstraints_Ultimate(allData, bestByClass, headers);
+  if (!validationResult.ok) {
+    logLine('ERROR', '❌ VALIDATION DISSO ÉCHOUÉE après Phase 4 ULTIMATE !');
+    validationResult.duplicates.forEach(dup => {
+      logLine('ERROR', `    • ${dup.classe} : ${dup.code} présent ${dup.count} fois (${dup.noms.join(', ')})`);
+    });
+  } else {
+    logLine('INFO', '✅ Validation DISSO : Aucune duplication détectée');
+  }
+
+  logLine('SUCCESS', `✅ ULTIMATE MULTI-RESTART Terminé : meilleur sur ${maxRestarts} seeds. Seed gagnant: ${bestSeed}`);
+  return {
+    ok: true,
+    swapsApplied: bestSwaps + bestSwaps3Way,
+    swaps3Way: bestSwaps3Way,
+    seed: bestSeed,
+    restarts: maxRestarts,
+    saveResult: saveResult,
+    validation: validationResult
+  };
+}
+
+/**
+ * Coeur du moteur Phase 4 Ultimate.
+ * Travaille uniquement en mémoire (byClass) — pas d'I/O sheet.
+ * Appelé N fois par le multi-restart avec des seeds différentes.
+ *
+ * @returns {{ swapsApplied, swaps3Way }}
+ */
+function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx, config, rng) {
   let swapsApplied = 0;
   let stagnationCount = 0;
 
   for (let iter = 0; iter < config.maxSwaps; iter++) {
-
-    // A. Identifier la classe la plus "malade"
     const worstClassKey = findWorstClass_Ultimate(byClass, allData, globalStats, ctx);
     if (!worstClassKey) break;
 
-    // B. Trouver partenaire complémentaire (U2: avec PART)
     const partnerClassKey = findPartnerClass_Ultimate(worstClassKey, byClass, allData, globalStats, rng);
     if (!partnerClassKey) {
       stagnationCount++;
@@ -144,41 +180,31 @@ function Phase4_Ultimate_Run(ctx) {
       continue;
     }
 
-    // C. U1: Sampling priorisé — sélectionner les candidats les plus perturbants
     const bestSwap = findBestSwapPrioritized_Ultimate(worstClassKey, partnerClassKey, allData, byClass, headers, globalStats, ctx, rng, config);
 
-    // D. Appliquer si gain positif
     if (bestSwap && bestSwap.gain > 0.0001) {
       applySwap_Ultimate(allData, byClass, bestSwap, headers);
       swapsApplied++;
       stagnationCount = 0;
-
-      if (swapsApplied % 10 === 0 || swapsApplied <= 5) {
-        logLine('INFO', `⚡ Swap #${swapsApplied}: ${bestSwap.reason} (Gain: ${bestSwap.gain.toFixed(4)})`);
-      }
     } else {
       stagnationCount++;
     }
 
-    if (stagnationCount >= config.stagnationLimit) {
-      logLine('INFO', '🛑 Convergence atteinte (Stagnation).');
-      break;
-    }
+    if (stagnationCount >= config.stagnationLimit) break;
   }
 
-  // 3b. 3-WAY CYCLE SWAPS avec RNG seedable
-  logLine('INFO', '🔄 Lancement swaps 3-voies ULTIMATE (REPLICANT)...');
-  let swaps3WayU = 0;
-  const classNamesU = Object.keys(byClass);
+  // 3-WAY CYCLE SWAPS
+  let swaps3Way = 0;
+  const classNames = Object.keys(byClass);
 
   for (let iter3 = 0; iter3 < 200; iter3++) {
-    let bestGain3U = 0.001;
-    let best3WayU = null;
+    let bestGain3 = 0.001;
+    let best3Way = null;
 
     for (let t = 0; t < 15; t++) {
-      const c1 = rng.pick(classNamesU);
-      const c2 = rng.pick(classNamesU);
-      const c3 = rng.pick(classNamesU);
+      const c1 = rng.pick(classNames);
+      const c2 = rng.pick(classNames);
+      const c3 = rng.pick(classNames);
       if (c1 === c2 || c2 === c3 || c1 === c3) continue;
       if (!byClass[c1].length || !byClass[c2].length || !byClass[c3].length) continue;
 
@@ -192,11 +218,9 @@ function Phase4_Ultimate_Run(ctx) {
         const c = rng.pick(byClass[c3]);
         if (isFixed(allData[a]) || isFixed(allData[b]) || isFixed(allData[c])) continue;
 
-        // Vérifier contraintes : A→c2, B→c3, C→c1
         if (!canSwapStudents_Ultimate(a, b, c1, c2, byClass[c1], byClass[c2], allData, headers, ctx)) continue;
         if (!canSwapStudents_Ultimate(b, c, c2, c3, byClass[c2], byClass[c3], allData, headers, ctx)) continue;
 
-        // Simuler rotation
         const tempC1 = byClass[c1].filter(x => x !== a).concat([c]);
         const tempC2 = byClass[c2].filter(x => x !== b).concat([a]);
         const tempC3 = byClass[c3].filter(x => x !== c).concat([b]);
@@ -206,52 +230,24 @@ function Phase4_Ultimate_Run(ctx) {
                             calculateScore_Ultimate(tempC3, allData, globalStats, c3, ctx);
 
         const gain3 = scoreBefore3 - scoreAfter3;
-        if (gain3 > bestGain3U) {
-          bestGain3U = gain3;
-          best3WayU = { a, b, c, c1, c2, c3 };
+        if (gain3 > bestGain3) {
+          bestGain3 = gain3;
+          best3Way = { a, b, c, c1, c2, c3 };
         }
       }
     }
 
-    if (!best3WayU) break;
+    if (!best3Way) break;
 
-    // Appliquer la rotation
-    const { a, b, c, c1, c2, c3 } = best3WayU;
+    const { a, b, c, c1, c2, c3 } = best3Way;
     byClass[c1] = byClass[c1].filter(x => x !== a).concat([c]);
     byClass[c2] = byClass[c2].filter(x => x !== b).concat([a]);
     byClass[c3] = byClass[c3].filter(x => x !== c).concat([b]);
-    swaps3WayU++;
+    swaps3Way++;
     swapsApplied++;
   }
 
-  if (swaps3WayU > 0) {
-    logLine('INFO', `  ✅ ${swaps3WayU} swaps 3-voies ULTIMATE appliqués.`);
-  }
-
-  // 4. SAUVEGARDE RÉELLE
-  const saveResult = saveResults_Ultimate(ss, allData, byClass, headers);
-
-  // 🔍 VALIDATION FINALE : Vérifier absence de duplications DISSO
-  const validationResult = validateDISSOConstraints_Ultimate(allData, byClass, headers);
-  if (!validationResult.ok) {
-    logLine('ERROR', '❌ VALIDATION DISSO ÉCHOUÉE après Phase 4 ULTIMATE !');
-    logLine('ERROR', `  Duplications détectées : ${validationResult.duplicates.length}`);
-    validationResult.duplicates.forEach(dup => {
-      logLine('ERROR', `    • ${dup.classe} : ${dup.code} présent ${dup.count} fois (${dup.noms.join(', ')})`);
-    });
-  } else {
-    logLine('INFO', '✅ Validation DISSO : Aucune duplication détectée');
-  }
-
-  logLine('SUCCESS', `✅ ULTIMATE REPLICANT Terminé : ${swapsApplied} swaps (dont ${swaps3WayU} 3-voies). Seed: ${rng.seed}`);
-  return {
-    ok: true,
-    swapsApplied: swapsApplied,
-    swaps3Way: swaps3WayU,
-    seed: rng.seed,
-    saveResult: saveResult,
-    validation: validationResult
-  };
+  return { swapsApplied: swapsApplied, swaps3Way: swaps3Way };
 }
 
 // ===================================================================
