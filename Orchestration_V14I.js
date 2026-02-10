@@ -277,14 +277,46 @@ function runOptimizationV14FullI(options) {
     ok = ok && p3.ok;
     logLine('INFO', '✅ Phase 3 V3 terminée');
 
-    // ===== PHASE 4 V3 : Swaps COM/TRA/PART/ABS (depuis _BASEOPTI) =====
-    logLine('INFO', '\n📌 PHASE 4 V3 : Optimisation par swaps (depuis _BASEOPTI, COM prioritaire)...');
-    const p4 = Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx);
+    // ===== CROSS-PHASE LOOP : Phase 3 → Phase 4 avec feedback =====
+    // Boucle itérative : si Phase 4 n'améliore pas assez,
+    // on re-brasse la pire classe et on relance Phase 3 + Phase 4.
+    const crossPhaseLoops = MULTI_RESTART_CONFIG.crossPhaseLoops;
+    let p4 = null;
+    let previousError = Infinity;
+
+    for (let cpLoop = 0; cpLoop <= crossPhaseLoops; cpLoop++) {
+      if (cpLoop > 0) {
+        // Re-run Phase 3 : re-brasser pour donner de nouvelles cartes à Phase 4
+        logLine('INFO', '\n🔄 CROSS-PHASE boucle ' + cpLoop + '/' + crossPhaseLoops + ' : relance Phase 3 + Phase 4');
+
+        // Réinjecter les élèves de la pire classe dans le pool (désassigner)
+        reshuffleWorstClass_V3_(ctx);
+
+        const p3b = Phase3I_completeAndParity_BASEOPTI_V3(ctx);
+        phasesOut.push(tagPhase_('Phase 3 V3 - Cross-Phase #' + cpLoop, p3b));
+        forceCacheInUIAndReload_(ctx);
+      }
+
+      // Phase 4 : Optimisation par swaps (multi-restart intégré)
+      logLine('INFO', '\n📌 PHASE 4 V3 : Optimisation par swaps' + (cpLoop > 0 ? ' (cross-phase #' + cpLoop + ')' : '') + '...');
+      p4 = Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx);
+
+      const currentError = p4.finalError || Infinity;
+      const improvement = previousError > 0 ? (previousError - currentError) / previousError : 0;
+
+      logLine('INFO', '✅ Phase 4 V3 : ' + (p4.swapsApplied || 0) + ' swaps, erreur=' + (currentError === Infinity ? '?' : currentError.toFixed(2)) + ', amélioration=' + (improvement * 100).toFixed(1) + '%');
+
+      if (cpLoop > 0 && improvement < MULTI_RESTART_CONFIG.minImprovementPct) {
+        logLine('INFO', '  🛑 Amélioration insuffisante (' + (improvement * 100).toFixed(1) + '% < ' + (MULTI_RESTART_CONFIG.minImprovementPct * 100).toFixed(1) + '%), arrêt cross-phase.');
+        break;
+      }
+      previousError = currentError;
+    }
+
     phasesOut.push(tagPhase_('Phase 4 V3 - Swaps', p4));
     announcePhaseDone_('Phase 4 V3 terminée : ' + (p4.swapsApplied || 0) + ' swaps appliqués. Résultat dans _BASEOPTI + CACHE');
     forceCacheInUIAndReload_(ctx);
     ok = ok && (p4.ok !== false);
-    logLine('INFO', '✅ Phase 4 V3 terminée : ' + (p4.swapsApplied || 0) + ' swaps appliqués');
 
     // Basculer l'interface en mode CACHE
     setInterfaceModeCACHE_(ctx);

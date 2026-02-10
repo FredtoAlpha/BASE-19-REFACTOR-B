@@ -8,8 +8,8 @@
  *
  * RÈGLE : Toute modification de langue ou option se fait ICI.
  *
- * Branche : claude/replicant-algo-j0ITC
- * Date : 2026-02-09
+ * Branche : claude/multi-restart-algo-j0ITC
+ * Date : 2026-02-10
  * ===================================================================
  */
 
@@ -157,9 +157,10 @@ function createRNG(seed) {
  * @param {Array} data - tableau complet des élèves
  * @param {Object} headerIdx - map { COM: n, TRA: n, PART: n, ABS: n, SEXE: n }
  */
-function ClassState(className, studentIndices, data, headerIdx) {
+function ClassState(className, studentIndices, data, headerIdx, targetSize) {
   this.name = className;
   this.size = studentIndices.length;
+  this.targetSize = targetSize || 0; // MULTI-RESTART: effectif cible pour pénalité
   this.nbF = 0;
   this.nbM = 0;
   this.nbTetes = 0;
@@ -254,6 +255,12 @@ ClassState.prototype.computeError = function(globalStats, targetDistribution, we
 
   var error = 0;
 
+  // MULTI-RESTART: Pénalité d'effectif (manquait dans V14I, crucial pour l'équilibre)
+  if (this.targetSize > 0) {
+    var sizeDiff = this.size - this.targetSize;
+    error += sizeDiff * sizeDiff * (weights.effectif || 2.0);
+  }
+
   // Parité
   var ratioF = this.nbF / this.size;
   error += Math.abs(ratioF - globalStats.ratioF) * (weights.parity || 1.0);
@@ -326,3 +333,60 @@ ClassState.prototype.applySwap = function(outIdx, inIdx, data, hIdx) {
   this._addStudent(inIdx, data, hIdx);
   this.size++; // _addStudent doesn't increment, _removeStudent decremented
 };
+
+// ===================================================================
+// MULTI-RESTART CONFIGURATION
+// ===================================================================
+
+/**
+ * Configuration par défaut du multi-restart.
+ * Utilisée par les deux pipelines (NAUTILUS + LEGACY).
+ * GAS autorise 6 min d'exécution ; un run Phase 4 prend ~10-30s,
+ * donc 5 restarts tiennent largement dans le budget.
+ */
+var MULTI_RESTART_CONFIG = {
+  maxRestarts: 5,           // Nombre de seeds à tester
+  seedSpacing: 7919,        // Espacement entre seeds (nombre premier)
+  crossPhaseLoops: 2,       // Boucles Phase3→Phase4 supplémentaires
+  reshuffleWorstRatio: 0.5, // Fraction du worst-class à réinjecter dans le pool
+  minImprovementPct: 0.005  // Seuil d'amélioration minimal pour continuer les boucles (0.5%)
+};
+
+/**
+ * Clone profond d'un tableau 2D (snapshot _BASEOPTI / data).
+ * Plus rapide que JSON.parse(JSON.stringify()) pour les tableaux de primitives.
+ */
+function snapshotData_(data) {
+  var copy = new Array(data.length);
+  for (var i = 0; i < data.length; i++) {
+    copy[i] = data[i].slice();
+  }
+  return copy;
+}
+
+/**
+ * Clone profond d'un objet byClass { className: [indices] }.
+ */
+function snapshotByClass_(byClass) {
+  var copy = {};
+  for (var cls in byClass) {
+    copy[cls] = byClass[cls].slice();
+  }
+  return copy;
+}
+
+/**
+ * Calcule le score global d'erreur pour l'ensemble des classes (somme de ClassState.computeError).
+ * @param {Object} classStates - Map className → ClassState
+ * @param {Object} globalStats
+ * @param {Object} targetDistribution
+ * @param {Object} weights
+ * @returns {number}
+ */
+function computeTotalError_(classStates, globalStats, targetDistribution, weights) {
+  var err = 0;
+  for (var cls in classStates) {
+    err += classStates[cls].computeError(globalStats, targetDistribution, weights);
+  }
+  return err;
+}

@@ -218,6 +218,9 @@ function Phase2I_applyDissoAsso_BASEOPTI_V3(ctx) {
   }
 
   // ============= CODES DISSO (D) =============
+  // MULTI-RESTART: Tri par densité de contraintes (groupes les plus gros d'abord)
+  // Les groupes DISSO avec le plus d'élèves sont les plus contraints,
+  // ils doivent être placés en premier pour maximiser les options.
 
   const groupsD = {};
   for (let i = 1; i < data.length; i++) {
@@ -225,16 +228,21 @@ function Phase2I_applyDissoAsso_BASEOPTI_V3(ctx) {
     if (codeD) {
       if (!groupsD[codeD]) groupsD[codeD] = [];
       groupsD[codeD].push(i);
-      dissoMoved++; // ✅ Compter chaque élève avec un code DISSO
+      dissoMoved++;
     }
   }
 
-  logLine('INFO', '🚫 Groupes DISSO : ' + Object.keys(groupsD).length + ' (' + dissoMoved + ' élèves)');
+  // Trier les codes DISSO par taille décroissante (plus contraints en premier)
+  const sortedDissoCodes = Object.keys(groupsD).sort(function(a, b) {
+    return groupsD[b].length - groupsD[a].length;
+  });
 
-  for (const code in groupsD) {
+  logLine('INFO', '🚫 Groupes DISSO : ' + sortedDissoCodes.length + ' (' + dissoMoved + ' élèves)');
+  logLine('INFO', '  📐 Ordre de traitement (plus contraints d\'abord) : ' + sortedDissoCodes.map(function(c) { return c + '(' + groupsD[c].length + ')'; }).join(', '));
+
+  for (let dIdx = 0; dIdx < sortedDissoCodes.length; dIdx++) {
+    const code = sortedDissoCodes[dIdx];
     const indices = groupsD[code];
-    // ✅ CORRECTION : Ne pas skip les groupes avec 1 élève (il faut vérifier la classe)
-    // if (indices.length <= 1) continue;
 
     logLine('INFO', '  🚫 D=' + code + ' : ' + indices.length + ' élève(s) à vérifier');
 
@@ -470,43 +478,101 @@ function findClassWithoutCodeD_V3(data, headers, codeD, indicesWithD, eleveIdx, 
     if (cls) allClasses.add(cls);
   }
 
-  // 🔒 PRIORITÉ 1 : Trouver une classe qui propose LV2/OPT de l'élève ET sans code DISSO
+  // MULTI-RESTART: Sélection intelligente — score chaque classe compatible,
+  // choisir celle qui minimise la disruption de profil (pas first-found).
+  const idxCOM = headers.indexOf('COM');
+  const idxTRA = headers.indexOf('TRA');
+  const eleveCOM = Number(data[eleveIdx][idxCOM] || 2.5);
+  const eleveTRA = Number(data[eleveIdx][idxTRA] || 2.5);
+
+  // Calculer la moyenne globale COM/TRA pour référence
+  let globalCOM = 0, globalTRA = 0, globalN = 0;
+  for (let i = 1; i < data.length; i++) {
+    globalCOM += Number(data[i][idxCOM] || 2.5);
+    globalTRA += Number(data[i][idxTRA] || 2.5);
+    globalN++;
+  }
+  const avgGlobalCOM = globalN > 0 ? globalCOM / globalN : 2.5;
+  const avgGlobalTRA = globalN > 0 ? globalTRA / globalN : 2.5;
+
+  // Collecter les classes candidates avec leur score de disruption
+  const candidates = [];
+
   if (eleveLV2 || eleveOPT) {
     for (const cls of Array.from(allClasses)) {
-      if (classesWithD.has(cls)) continue; // Déjà un élève avec ce code DISSO
+      if (classesWithD.has(cls)) continue;
 
-      // Vérifier si cette classe propose LV2/OPT de l'élève
       const quotas = (ctx && ctx.quotas && ctx.quotas[cls]) || {};
-      
       let canPlace = false;
       if (eleveLV2 && isKnownLV2(eleveLV2)) {
-        // L'élève a une LV2 spécifique
         canPlace = (quotas[eleveLV2] !== undefined && quotas[eleveLV2] > 0);
       } else if (eleveOPT) {
-        // L'élève a une option spécifique
         canPlace = (quotas[eleveOPT] !== undefined && quotas[eleveOPT] > 0);
       }
 
       if (canPlace) {
-        logLine('INFO', '        ✅ Classe ' + cls + ' compatible (propose ' + (eleveLV2 || eleveOPT) + ')');
-        return cls;
+        // Calculer le profil moyen de la classe cible
+        let clsCOM = 0, clsTRA = 0, clsN = 0;
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][idxAssigned] || '').trim() === cls) {
+            clsCOM += Number(data[i][idxCOM] || 2.5);
+            clsTRA += Number(data[i][idxTRA] || 2.5);
+            clsN++;
+          }
+        }
+        var clsAvgCOM = clsN > 0 ? clsCOM / clsN : 2.5;
+        var clsAvgTRA = clsN > 0 ? clsTRA / clsN : 2.5;
+
+        // Score = combien l'ajout de cet élève rapproche la classe de la moyenne globale
+        var newAvgCOM = (clsCOM + eleveCOM) / (clsN + 1);
+        var newAvgTRA = (clsTRA + eleveTRA) / (clsN + 1);
+        var gapBefore = Math.abs(clsAvgCOM - avgGlobalCOM) + Math.abs(clsAvgTRA - avgGlobalTRA);
+        var gapAfter = Math.abs(newAvgCOM - avgGlobalCOM) + Math.abs(newAvgTRA - avgGlobalTRA);
+        var disruption = gapAfter - gapBefore; // Négatif = bon (rapproche de la moyenne)
+
+        candidates.push({ cls: cls, disruption: disruption });
       }
     }
 
-    // ⚠️ Aucune classe compatible trouvée
+    if (candidates.length > 0) {
+      candidates.sort(function(a, b) { return a.disruption - b.disruption; });
+      logLine('INFO', '        ✅ Classe ' + candidates[0].cls + ' optimale (propose ' + (eleveLV2 || eleveOPT) + ', disruption=' + candidates[0].disruption.toFixed(3) + ')');
+      return candidates[0].cls;
+    }
+
     logLine('WARN', '        ⚠️ Aucune classe sans D=' + codeD + ' ne propose ' + (eleveLV2 || eleveOPT));
     logLine('WARN', '        🔒 CONTRAINTE LV2/OPT ABSOLUE : élève reste dans sa classe (doublon DISSO accepté)');
-    return null; // ❌ Impossible de déplacer sans violer LV2/OPT
+    return null;
   }
 
-  // 🔒 PRIORITÉ 2 : Si pas de LV2/OPT spécifique, n'importe quelle classe sans code DISSO
+  // Si pas de LV2/OPT spécifique, choisir la classe sans DISSO qui profite le plus de cet élève
   for (const cls of Array.from(allClasses)) {
     if (!classesWithD.has(cls)) {
-      return cls;
+      candidates.push({ cls: cls, disruption: 0 });
     }
   }
 
-  return null; // Aucune classe disponible
+  if (candidates.length > 0) {
+    // Scorer chaque candidat pour choisir la meilleure
+    for (let ci = 0; ci < candidates.length; ci++) {
+      var _cls = candidates[ci].cls;
+      var _clsCOM = 0, _clsTRA = 0, _clsN = 0;
+      for (var ii = 1; ii < data.length; ii++) {
+        if (String(data[ii][idxAssigned] || '').trim() === _cls) {
+          _clsCOM += Number(data[ii][idxCOM] || 2.5);
+          _clsTRA += Number(data[ii][idxTRA] || 2.5);
+          _clsN++;
+        }
+      }
+      var _clsAvg = _clsN > 0 ? _clsCOM / _clsN : 2.5;
+      var _newAvg = (_clsCOM + eleveCOM) / (_clsN + 1);
+      candidates[ci].disruption = Math.abs(_newAvg - avgGlobalCOM) - Math.abs(_clsAvg - avgGlobalCOM);
+    }
+    candidates.sort(function(a, b) { return a.disruption - b.disruption; });
+    return candidates[0].cls;
+  }
+
+  return null;
 }
 
 /**
@@ -856,40 +922,23 @@ function logParityDecision(cls, details) {
 
 
 // ===================================================================
-// PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
+// CROSS-PHASE : RESHUFFLE DE LA PIRE CLASSE
 // ===================================================================
 
 /**
- * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
- * composite qui vise à harmoniser la distribution des scores dans les classes
- * tout en équilibrant la parité F/M.
+ * Identifie la classe avec la plus grande erreur et réinjecte une fraction
+ * de ses élèves mobiles dans le pool non-assigné (_CLASS_ASSIGNED = '').
+ * Phase 3 les replaceera ensuite de manière plus intelligente.
  *
- * REPLICANT VERSION :
- * - N1: ClassState incrémental (O(1) par simulation au lieu de O(N))
- * - N2: Mini recuit simulé (accepte swaps négatifs avec budget décroissant)
- * - N3: PRNG seedable pour reproductibilité
- * - F5: 3-way cycle swaps avec ClassState
+ * Utilisé par la boucle cross-phase de l'orchestrateur V14I.
  */
-function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
-  logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - REPLICANT (JULES-VERNE-NAUTILUS)');
-  logLine('INFO', '='.repeat(80));
-
-  const weights = ctx.weights || { parity: 1.0, com: 1.0, tra: 0.5, part: 0.3, abs: 0.2, profiles: 2.0 };
-  const maxSwaps = ctx.maxSwaps || 500;
-
-  // N3: PRNG seedable
-  const rngSeed = ctx.seed || null;
-  const rng = createRNG(rngSeed);
-  logLine('INFO', '🎲 PRNG seed: ' + rng.seed + ' (reproductible)');
-  logLine('INFO', '⚖️ Poids : ' + JSON.stringify(weights));
-
+function reshuffleWorstClass_V3_(ctx) {
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
+  if (!baseSheet) return;
+
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
-
-  // Index des colonnes
   const hIdx = {
     ASSIGNED: headers.indexOf('_CLASS_ASSIGNED'),
     SEXE: headers.indexOf('SEXE'),
@@ -902,30 +951,141 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   };
 
   // Construire byClass
-  const byClass = {};
-  for (let i = 1; i < data.length; i++) {
-    const cls = String(data[i][hIdx.ASSIGNED] || '').trim();
+  var byClass = {};
+  for (var i = 1; i < data.length; i++) {
+    var cls = String(data[i][hIdx.ASSIGNED] || '').trim();
     if (cls) {
       if (!byClass[cls]) byClass[cls] = [];
       byClass[cls].push(i);
     }
   }
 
-  // Distribution cible (calcul classique, une seule fois)
-  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
+  // Calculer les stats globales
+  var totalStudents = 0, globalNbF = 0, globalSumCOM = 0, globalSumTRA = 0;
+  for (i = 1; i < data.length; i++) {
+    totalStudents++;
+    if (String(data[i][hIdx.SEXE] || '').toUpperCase().charAt(0) === 'F') globalNbF++;
+    globalSumCOM += Number(data[i][hIdx.COM] || 2.5);
+    globalSumTRA += Number(data[i][hIdx.TRA] || 2.5);
+  }
+  var globalStats = {
+    ratioF: totalStudents > 0 ? globalNbF / totalStudents : 0.5,
+    avgCOM: totalStudents > 0 ? globalSumCOM / totalStudents : 2.5,
+    avgTRA: totalStudents > 0 ? globalSumTRA / totalStudents : 2.5,
+    totalStudents: totalStudents
+  };
 
-  // N1: Initialiser les ClassState incrémentaux
-  const classStates = {};
-  let totalStudents = 0;
-  let globalSumCOM = 0, globalSumTRA = 0, globalNbF = 0;
-  for (const cls in byClass) {
-    classStates[cls] = new ClassState(cls, byClass[cls], data, hIdx);
-    totalStudents += classStates[cls].size;
-    globalSumCOM += classStates[cls].sumCOM;
-    globalSumTRA += classStates[cls].sumTRA;
-    globalNbF += classStates[cls].nbF;
+  var weights = ctx.weights || { parity: 1.0, com: 1.0, tra: 0.5, part: 0.3, abs: 0.2, profiles: 2.0, effectif: 2.0 };
+
+  // Trouver la pire classe (erreur la plus élevée)
+  var worstClass = null;
+  var worstError = -1;
+  for (var clsName in byClass) {
+    var targetSize = (ctx.targets && ctx.targets[clsName]) || 0;
+    var cs = new ClassState(clsName, byClass[clsName], data, hIdx, targetSize);
+    var err = cs.computeError(globalStats, null, weights);
+    if (err > worstError) {
+      worstError = err;
+      worstClass = clsName;
+    }
   }
 
+  if (!worstClass) return;
+
+  // Réinjecter une fraction des élèves mobiles de la pire classe
+  var ratio = MULTI_RESTART_CONFIG.reshuffleWorstRatio;
+  var indices = byClass[worstClass].slice();
+  var mobileIndices = indices.filter(function(idx) {
+    var mob = String(data[idx][hIdx.MOBILITE] || '').toUpperCase();
+    var fixe = String(data[idx][hIdx.FIXE] || '').toUpperCase();
+    return !mob.includes('FIXE') && !fixe.includes('FIXE') && !fixe.includes('OUI');
+  });
+
+  var nbToReshuffle = Math.max(1, Math.floor(mobileIndices.length * ratio));
+  // Trier par profil extrême (les plus éloignés de la moyenne globale en premier)
+  mobileIndices.sort(function(a, b) {
+    var distA = Math.abs(Number(data[a][hIdx.COM] || 2.5) - globalStats.avgCOM) +
+                Math.abs(Number(data[a][hIdx.TRA] || 2.5) - globalStats.avgTRA);
+    var distB = Math.abs(Number(data[b][hIdx.COM] || 2.5) - globalStats.avgCOM) +
+                Math.abs(Number(data[b][hIdx.TRA] || 2.5) - globalStats.avgTRA);
+    return distB - distA; // Plus extrêmes en premier
+  });
+
+  var ejected = 0;
+  for (var j = 0; j < nbToReshuffle && j < mobileIndices.length; j++) {
+    data[mobileIndices[j]][hIdx.ASSIGNED] = ''; // Remettre dans le pool
+    ejected++;
+  }
+
+  logLine('INFO', '  🔄 Reshuffle: ' + ejected + ' élèves éjectés de ' + worstClass + ' (erreur=' + worstError.toFixed(2) + ')');
+
+  // Écrire dans _BASEOPTI
+  baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
+  SpreadsheetApp.flush();
+}
+
+// ===================================================================
+// PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
+// ===================================================================
+
+/**
+ * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
+ * composite qui vise à harmoniser la distribution des scores dans les classes
+ * tout en équilibrant la parité F/M.
+ *
+ * MULTI-RESTART VERSION (ex-REPLICANT) :
+ * - N1: ClassState incrémental (O(1) par simulation au lieu de O(N))
+ * - N2: Mini recuit simulé (accepte swaps négatifs avec budget décroissant)
+ * - N3: PRNG seedable pour reproductibilité
+ * - F5: 3-way cycle swaps avec ClassState
+ * - MR: Multi-restart (5 seeds, garde le meilleur résultat)
+ * - EFF: Pénalité d'effectif dans ClassState.computeError
+ */
+function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
+  logLine('INFO', '='.repeat(80));
+  logLine('INFO', '📌 PHASE 4 V3 - MULTI-RESTART NAUTILUS');
+  logLine('INFO', '='.repeat(80));
+
+  const weights = ctx.weights || { parity: 1.0, com: 1.0, tra: 0.5, part: 0.3, abs: 0.2, profiles: 2.0, effectif: 2.0 };
+  const maxSwaps = ctx.maxSwaps || 500;
+  const mrConfig = MULTI_RESTART_CONFIG;
+  const maxRestarts = mrConfig.maxRestarts;
+
+  const ss = ctx.ss || SpreadsheetApp.getActive();
+  const baseSheet = ss.getSheetByName('_BASEOPTI');
+  const snapshot = baseSheet.getDataRange().getValues();
+  const headers = snapshot[0];
+
+  // Index des colonnes (invariant entre restarts)
+  const hIdx = {
+    ASSIGNED: headers.indexOf('_CLASS_ASSIGNED'),
+    SEXE: headers.indexOf('SEXE'),
+    COM: headers.indexOf('COM'),
+    TRA: headers.indexOf('TRA'),
+    PART: headers.indexOf('PART'),
+    ABS: headers.indexOf('ABS'),
+    MOBILITE: headers.indexOf('MOBILITE'),
+    FIXE: headers.indexOf('FIXE')
+  };
+
+  // Pré-calcul invariant : distribution cible + stats globales
+  const snapshotByClass = {};
+  for (let i = 1; i < snapshot.length; i++) {
+    const cls = String(snapshot[i][hIdx.ASSIGNED] || '').trim();
+    if (cls) {
+      if (!snapshotByClass[cls]) snapshotByClass[cls] = [];
+      snapshotByClass[cls].push(i);
+    }
+  }
+  const targetDistribution = calculateTargetDistribution_V3(snapshot, headers, snapshotByClass);
+
+  let totalStudents = 0, globalSumCOM = 0, globalSumTRA = 0, globalNbF = 0;
+  for (let i = 1; i < snapshot.length; i++) {
+    totalStudents++;
+    globalSumCOM += Number(snapshot[i][hIdx.COM] || 2.5);
+    globalSumTRA += Number(snapshot[i][hIdx.TRA] || 2.5);
+    if (String(snapshot[i][hIdx.SEXE] || '').toUpperCase().charAt(0) === 'F') globalNbF++;
+  }
   const globalStats = {
     ratioF: totalStudents > 0 ? globalNbF / totalStudents : 0.5,
     avgCOM: totalStudents > 0 ? globalSumCOM / totalStudents : 2.5,
@@ -933,54 +1093,110 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     totalStudents: totalStudents
   };
 
-  logLine('INFO', `🎯 ${totalStudents} élèves, ${Object.keys(byClass).length} classes, ratio F=${(globalStats.ratioF*100).toFixed(1)}%`);
+  logLine('INFO', `🎯 ${totalStudents} élèves, ${Object.keys(snapshotByClass).length} classes, ratio F=${(globalStats.ratioF*100).toFixed(1)}%`);
+  logLine('INFO', `🔁 Multi-restart : ${maxRestarts} seeds`);
 
-  // Score initial via ClassState (O(C) au lieu de O(C*N))
-  function totalError() {
-    let err = 0;
-    for (const cls in classStates) {
-      err += classStates[cls].computeError(globalStats, targetDistribution, weights);
+  // ===== MULTI-RESTART LOOP =====
+  let bestData = null;
+  let bestError = Infinity;
+  let bestSwaps = 0;
+  let bestSwaps3Way = 0;
+  let bestAnnealing = 0;
+  let bestSeed = 0;
+
+  for (let restart = 0; restart < maxRestarts; restart++) {
+    const seed = ctx.seed ? ctx.seed + restart * mrConfig.seedSpacing : restart * mrConfig.seedSpacing;
+    const rng = createRNG(seed);
+
+    // Copie indépendante des données pour ce restart
+    const data = snapshotData_(snapshot);
+    const byClass = snapshotByClass_(snapshotByClass);
+
+    logLine('INFO', `  🔁 Restart ${restart + 1}/${maxRestarts} (seed=${seed})`);
+
+    // Résultat de ce restart
+    const result = runPhase4CoreLoop_V3_(data, headers, hIdx, byClass, weights, maxSwaps, rng, globalStats, targetDistribution, ctx);
+
+    logLine('INFO', `    📊 Erreur=${result.finalError.toFixed(2)}, swaps=${result.swapsApplied}+${result.swaps3Way}(3-way)`);
+
+    if (result.finalError < bestError) {
+      bestError = result.finalError;
+      bestData = data;
+      bestSwaps = result.swapsApplied;
+      bestSwaps3Way = result.swaps3Way;
+      bestAnnealing = result.annealingUsed;
+      bestSeed = seed;
+      logLine('INFO', `    ⭐ Nouveau meilleur ! (erreur=${bestError.toFixed(2)})`);
     }
-    return err;
+  }
+
+  // Écrire le meilleur résultat
+  logLine('INFO', `📊 Meilleur restart : seed=${bestSeed}, erreur=${bestError.toFixed(2)}, swaps=${bestSwaps}+${bestSwaps3Way}(3-way)`);
+  baseSheet.getRange(1, 1, bestData.length, headers.length).setValues(bestData);
+  SpreadsheetApp.flush();
+  copyBaseoptiToCache_V3(ctx);
+  if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
+
+  logLine('INFO', `✅ PHASE 4 MULTI-RESTART terminée : meilleur sur ${maxRestarts} seeds. Seed gagnant: ${bestSeed}`);
+
+  return {
+    ok: true,
+    swapsApplied: bestSwaps + bestSwaps3Way,
+    swaps3Way: bestSwaps3Way,
+    annealingUsed: bestAnnealing,
+    seed: bestSeed,
+    restarts: maxRestarts,
+    finalError: bestError
+  };
+}
+
+/**
+ * Coeur du moteur de swaps Phase 4 V3.
+ * Travaille uniquement en mémoire (data[]) — pas d'I/O sheet.
+ * Appelé N fois par le multi-restart avec des seeds différentes.
+ *
+ * @returns {{ swapsApplied, swaps3Way, annealingUsed, finalError }}
+ */
+function runPhase4CoreLoop_V3_(data, headers, hIdx, byClass, weights, maxSwaps, rng, globalStats, targetDistribution, ctx) {
+  // N1: Initialiser les ClassState incrémentaux
+  const classStates = {};
+  for (const cls in byClass) {
+    const targetSize = (ctx.targets && ctx.targets[cls]) || 0;
+    classStates[cls] = new ClassState(cls, byClass[cls], data, hIdx, targetSize);
+  }
+
+  function totalError() {
+    return computeTotalError_(classStates, globalStats, targetDistribution, weights);
   }
 
   let currentError = totalError();
-  logLine('INFO', `📊 Erreur initiale : ${currentError.toFixed(2)}`);
 
-  // Pré-calcul : est-ce que l'élève est fixe ?
   function isStudentFixed(idx) {
     const mob = String(data[idx][hIdx.MOBILITE] || '').toUpperCase();
     const fixe = String(data[idx][hIdx.FIXE] || '').toUpperCase();
     return mob.includes('FIXE') || fixe.includes('FIXE') || fixe.includes('OUI');
   }
 
-  // Historique anti-oscillation
   const swapHistory = new Map();
   let swapsApplied = 0;
 
-  // N2: Paramètres du recuit simulé
-  const annealingBudget = Math.floor(maxSwaps * 0.05); // 5% du budget total
+  // N2: Recuit simulé
+  const annealingBudget = Math.floor(maxSwaps * 0.05);
   let annealingUsed = 0;
-  const maxNegativeAccepted = -0.02 * currentError; // Max 2% de dégradation
+  const maxNegativeAccepted = -0.02 * currentError;
 
-  // === BOUCLE PRINCIPALE ===
   const classNames = Object.keys(byClass);
   let stagnation = 0;
   const stagnationLimit = 40;
 
   for (let iter = 0; iter < maxSwaps; iter++) {
-    // Identifier les top N perturbateurs via ClassState (O(N) mais rapide)
     const candidates = [];
     for (const cls in byClass) {
       const classError = classStates[cls].computeError(globalStats, targetDistribution, weights);
       for (let k = 0; k < byClass[cls].length; k++) {
         const si = byClass[cls][k];
         if (isStudentFixed(si)) continue;
-
-        // Perturbation O(1) via ClassState
         const errorWithout = classStates[cls].simulateSwap(si, si, data, hIdx, globalStats, targetDistribution, weights);
-        // simulateSwap(out, in) avec out===in donne l'erreur "neutre" mais en fait on veut
-        // calculer sans cet élève. On utilise un proxy rapide:
         const disruption = Math.abs(classError - errorWithout);
         candidates.push({ idx: si, cls: cls, disruption: disruption });
       }
@@ -990,11 +1206,9 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     const poolSize = Math.max(10, Math.floor(candidates.length * 0.6));
     const pool = candidates.slice(0, poolSize);
 
-    // Chercher le meilleur swap dans le pool
     let bestSwap = null;
     let bestGain = -Infinity;
 
-    // Échantillonner les paires (on ne teste pas tout le pool pour garder la perf)
     const maxPairs = Math.min(300, pool.length * (pool.length - 1) / 2);
     for (let p = 0; p < maxPairs; p++) {
       const s1 = rng.pick(pool);
@@ -1004,20 +1218,15 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
       const idx1 = s1.idx, idx2 = s2.idx;
       const cls1 = s1.cls, cls2 = s2.cls;
 
-      // Vérifier contraintes
       const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
       if (!swapCheck.ok) continue;
 
-      // N1: Simulation incrémentale O(1) via ClassState
       const errBefore = classStates[cls1].computeError(globalStats, targetDistribution, weights) +
                         classStates[cls2].computeError(globalStats, targetDistribution, weights);
-
       const errCls1After = classStates[cls1].simulateSwap(idx1, idx2, data, hIdx, globalStats, targetDistribution, weights);
       const errCls2After = classStates[cls2].simulateSwap(idx2, idx1, data, hIdx, globalStats, targetDistribution, weights);
 
       let gain = errBefore - (errCls1After + errCls2After);
-
-      // Ancre d'amarrage
       const h1 = swapHistory.get(idx1) || 0;
       const h2 = swapHistory.get(idx2) || 0;
       gain = gain / (1 + h1 + h2);
@@ -1028,42 +1237,30 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
       }
     }
 
-    // Décision d'application
     let accepted = false;
-
     if (bestSwap && bestSwap.gain > 1e-6) {
-      // Gain positif → toujours accepter
       accepted = true;
     } else if (bestSwap && bestSwap.gain > maxNegativeAccepted && annealingUsed < annealingBudget) {
-      // N2: Recuit simulé — accepter un swap légèrement négatif
-      // Probabilité décroissante avec le budget restant
       const temperature = 1.0 - (annealingUsed / annealingBudget);
       const acceptProba = Math.exp(bestSwap.gain / (temperature * 0.01 * Math.abs(currentError) + 1e-10));
       if (rng.next() < acceptProba) {
         accepted = true;
         annealingUsed++;
-        logLine('INFO', `  🔥 Recuit #${annealingUsed}: gain=${bestSwap.gain.toFixed(4)}, T=${temperature.toFixed(2)}, p=${acceptProba.toFixed(3)}`);
       }
     }
 
     if (!accepted) {
       stagnation++;
-      if (stagnation >= stagnationLimit) {
-        logLine('INFO', '  🛑 Convergence atteinte (stagnation).');
-        break;
-      }
+      if (stagnation >= stagnationLimit) break;
       continue;
     }
 
-    // Appliquer le swap
     stagnation = 0;
     const { idx1, idx2, cls1, cls2 } = bestSwap;
 
-    // Mettre à jour ClassState O(1)
     classStates[cls1].applySwap(idx1, idx2, data, hIdx);
     classStates[cls2].applySwap(idx2, idx1, data, hIdx);
 
-    // Mettre à jour data + byClass
     data[idx1][hIdx.ASSIGNED] = cls2;
     data[idx2][hIdx.ASSIGNED] = cls1;
     const pos1 = byClass[cls1].indexOf(idx1);
@@ -1074,18 +1271,10 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     swapHistory.set(idx1, (swapHistory.get(idx1) || 0) + 1);
     swapHistory.set(idx2, (swapHistory.get(idx2) || 0) + 1);
     swapsApplied++;
-
     currentError = totalError();
-
-    if (swapsApplied % 50 === 0) {
-      logLine('INFO', `  ⚡ Swap #${swapsApplied}: erreur=${currentError.toFixed(2)}, recuit=${annealingUsed}/${annealingBudget}`);
-    }
   }
 
-  logLine('INFO', `  ✅ Phase 2-way: ${swapsApplied} swaps, erreur=${currentError.toFixed(2)}`);
-
-  // ===== F5: 3-WAY CYCLE SWAPS avec ClassState + RNG =====
-  logLine('INFO', '  🔄 Lancement des swaps 3-voies...');
+  // ===== 3-WAY CYCLE SWAPS =====
   const max3Way = Math.min(100, Math.floor(maxSwaps * 0.2));
   let swaps3Way = 0;
 
@@ -1110,13 +1299,11 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
         if (!a || !b || !c) continue;
         if (isStudentFixed(a) || isStudentFixed(b) || isStudentFixed(c)) continue;
 
-        // Vérifier contraintes : A→c2, B→c3, C→c1
         const chkA = canPlaceInClass_V3(a, c2, data, headers, b, ctx);
         const chkB = canPlaceInClass_V3(b, c3, data, headers, c, ctx);
         const chkC = canPlaceInClass_V3(c, c1, data, headers, a, ctx);
         if (!chkA.ok || !chkB.ok || !chkC.ok) continue;
 
-        // Simuler via ClassState
         const errC1After = classStates[c1].simulateSwap(a, c, data, hIdx, globalStats, targetDistribution, weights);
         const errC2After = classStates[c2].simulateSwap(b, a, data, hIdx, globalStats, targetDistribution, weights);
         const errC3After = classStates[c3].simulateSwap(c, b, data, hIdx, globalStats, targetDistribution, weights);
@@ -1131,9 +1318,7 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
 
     if (!best3Way) break;
 
-    // Appliquer rotation A→c2, B→c3, C→c1
     const { a, b, c, c1, c2, c3 } = best3Way;
-
     classStates[c1].applySwap(a, c, data, hIdx);
     classStates[c2].applySwap(b, a, data, hIdx);
     classStates[c3].applySwap(c, b, data, hIdx);
@@ -1150,27 +1335,11 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     swapsApplied++;
   }
 
-  if (swaps3Way > 0) {
-    logLine('INFO', `  ✅ ${swaps3Way} swaps 3-voies appliqués.`);
-  }
-
-  // Finalisation
-  const finalError = totalError();
-  logLine('INFO', `📊 Erreur finale : ${finalError.toFixed(2)} (réduction: ${((1 - finalError / (currentError || 1)) * 100).toFixed(1)}%)`);
-
-  baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
-  SpreadsheetApp.flush();
-  copyBaseoptiToCache_V3(ctx);
-  if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
-
-  logLine('INFO', `✅ PHASE 4 REPLICANT terminée : ${swapsApplied} swaps (dont ${swaps3Way} 3-voies, ${annealingUsed} recuit). Seed: ${rng.seed}`);
-
   return {
-    ok: true,
     swapsApplied: swapsApplied,
     swaps3Way: swaps3Way,
     annealingUsed: annealingUsed,
-    seed: rng.seed
+    finalError: totalError()
   };
 }
 

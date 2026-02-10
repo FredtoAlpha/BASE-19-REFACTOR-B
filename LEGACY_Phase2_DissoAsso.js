@@ -145,6 +145,7 @@ function Phase2I_applyDissoAsso_LEGACY(ctx) {
   }
 
   // ========== ÉTAPE 4 : CODES DISSO (D) ==========
+  // MULTI-RESTART: Tri par densité de contraintes (groupes les plus gros d'abord)
   const groupsD = {};
   for (let i = 0; i < allData.length; i++) {
     const item = allData[i];
@@ -156,9 +157,16 @@ function Phase2I_applyDissoAsso_LEGACY(ctx) {
     }
   }
 
-  logLine('INFO', '🚫 Groupes DISSO : ' + Object.keys(groupsD).length + ' (' + dissoMoved + ' élèves)');
+  // Trier les codes DISSO par taille décroissante (plus contraints en premier)
+  const sortedDissoCodes = Object.keys(groupsD).sort(function(a, b) {
+    return groupsD[b].length - groupsD[a].length;
+  });
 
-  for (const code in groupsD) {
+  logLine('INFO', '🚫 Groupes DISSO : ' + sortedDissoCodes.length + ' (' + dissoMoved + ' élèves)');
+  logLine('INFO', '  📐 Ordre de traitement (plus contraints d\'abord) : ' + sortedDissoCodes.map(function(c) { return c + '(' + groupsD[c].length + ')'; }).join(', '));
+
+  for (let dIdx = 0; dIdx < sortedDissoCodes.length; dIdx++) {
+    const code = sortedDissoCodes[dIdx];
     const indices = groupsD[code];
 
     logLine('INFO', '  🚫 D=' + code + ' : ' + indices.length + ' élève(s) à vérifier');

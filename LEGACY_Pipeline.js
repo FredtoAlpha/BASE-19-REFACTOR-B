@@ -126,16 +126,38 @@ function legacy_runFullPipeline_PRIME() {
     }
     logLine('SUCCESS', `✅ Phase 3 terminée: ${p3Result.placed || 0} élèves placés, parité équilibrée`);
 
-    // 7. PHASE 4 : Optimisation fine par swaps (ULTIMATE)
-    logLine('INFO', '\n⚡ PHASE 4: Optimisation ULTIMATE...');
-    const p4Result = Phase4_Ultimate_Run(ctx);
+    // 7. CROSS-PHASE LOOP : Phase 3 → Phase 4 avec feedback
+    const crossPhaseLoops = MULTI_RESTART_CONFIG.crossPhaseLoops;
+    let p4Result = null;
+    let prevSwaps = 0;
 
-    if (!p4Result.ok) {
-      logLine('ERROR', `❌ Erreur moteur: ${p4Result.message}`);
-      ui.alert(`❌ Erreur optimisation: ${p4Result.message}`);
-      return { success: false, error: p4Result.message };
+    for (let cpLoop = 0; cpLoop <= crossPhaseLoops; cpLoop++) {
+      if (cpLoop > 0) {
+        logLine('INFO', '\n🔄 CROSS-PHASE boucle ' + cpLoop + '/' + crossPhaseLoops + ' : relance Phase 3 + Phase 4');
+
+        // Re-run Phase 3 pour redistribuer
+        const p3b = Phase3I_completeAndParity_LEGACY(ctx);
+        logLine('INFO', '  Phase 3 cross-phase : ' + (p3b.placed || 0) + ' élèves replacés');
+      }
+
+      logLine('INFO', '\n⚡ PHASE 4: Optimisation ULTIMATE' + (cpLoop > 0 ? ' (cross-phase #' + cpLoop + ')' : '') + '...');
+      p4Result = Phase4_Ultimate_Run(ctx);
+
+      if (!p4Result.ok) {
+        logLine('ERROR', `❌ Erreur moteur: ${p4Result.message}`);
+        ui.alert(`❌ Erreur optimisation: ${p4Result.message}`);
+        return { success: false, error: p4Result.message };
+      }
+
+      logLine('SUCCESS', `✅ Swaps appliqués: ${p4Result.swapsApplied}`);
+
+      // Vérifier si l'amélioration est suffisante pour continuer
+      if (cpLoop > 0 && p4Result.swapsApplied <= prevSwaps * 0.1) {
+        logLine('INFO', '  🛑 Peu d\'amélioration supplémentaire, arrêt cross-phase.');
+        break;
+      }
+      prevSwaps = p4Result.swapsApplied;
     }
-    logLine('SUCCESS', `✅ Swaps appliqués: ${p4Result.swapsApplied}`);
 
     // 8. CRÉER ONGLETS FIN avec contexte complet
     logLine('INFO', '\n💾 Finalisation avec contexte...');
