@@ -141,14 +141,38 @@ function Phase4_Ultimate_Run(ctx) {
 
     logLine('INFO', `    📊 Score=${totalScore.toFixed(2)}, swaps=${result.swapsApplied}+${result.swaps3Way}(3-way)`);
 
+    // PROP3 : Valider DISSO PAR RESTART — rejeter tout restart invalide
+    const restartValidation = validateDISSOConstraints_Ultimate(allData, byClass, headers);
+    if (!restartValidation.ok) {
+      logLine('WARN', `    ❌ Restart ${restart + 1} rejeté : DISSO invalide (${restartValidation.duplicates.length} conflit(s))`);
+      restartValidation.duplicates.forEach(dup => {
+        logLine('WARN', `      • ${dup.classe} : ${dup.code} x${dup.count} (${dup.noms.join(', ')})`);
+      });
+      continue; // On ne considère JAMAIS ce restart, même si son score est meilleur
+    }
+
     if (totalScore < bestScore) {
       bestScore = totalScore;
       bestByClass = snapshotByClass_(byClass);
       bestSwaps = result.swapsApplied;
       bestSwaps3Way = result.swaps3Way;
       bestSeed = seed;
-      logLine('INFO', `    ⭐ Nouveau meilleur ! (score=${bestScore.toFixed(2)})`);
+      logLine('INFO', `    ⭐ Nouveau meilleur ! (score=${bestScore.toFixed(2)}, DISSO ✅)`);
     }
+  }
+
+  // Si aucun restart n'a passé la validation DISSO, log explicite
+  if (!bestByClass) {
+    logLine('ERROR', '❌ AUCUN restart valide (tous rejetés par DISSO). Fallback sur l\'état pré-Phase4.');
+    return {
+      ok: false,
+      swapsApplied: 0,
+      swaps3Way: 0,
+      seed: 0,
+      restarts: maxRestarts,
+      saveResult: { ok: false },
+      validation: { ok: false, duplicates: [], message: 'Tous les restarts rejetés par DISSO' }
+    };
   }
 
   logLine('INFO', `📊 Meilleur restart : seed=${bestSeed}, score=${bestScore.toFixed(2)}, swaps=${bestSwaps}+${bestSwaps3Way}(3-way)`);
@@ -156,15 +180,15 @@ function Phase4_Ultimate_Run(ctx) {
   // 4. SAUVEGARDE DU MEILLEUR RÉSULTAT
   const saveResult = saveResults_Ultimate(ss, allData, bestByClass, headers);
 
-  // 5. VALIDATION FINALE
+  // 5. VALIDATION FINALE (filet de sécurité — le restart sélectionné a déjà passé DISSO)
   const validationResult = validateDISSOConstraints_Ultimate(allData, bestByClass, headers);
   if (!validationResult.ok) {
-    logLine('ERROR', '❌ VALIDATION DISSO ÉCHOUÉE après Phase 4 ULTIMATE !');
+    logLine('ERROR', '❌ VALIDATION DISSO ÉCHOUÉE après Phase 4 ULTIMATE (incohérence interne !)');
     validationResult.duplicates.forEach(dup => {
       logLine('ERROR', `    • ${dup.classe} : ${dup.code} présent ${dup.count} fois (${dup.noms.join(', ')})`);
     });
   } else {
-    logLine('INFO', '✅ Validation DISSO : Aucune duplication détectée');
+    logLine('INFO', '✅ Validation DISSO finale : confirmée');
   }
 
   logLine('SUCCESS', `✅ ULTIMATE MULTI-RESTART Terminé : meilleur sur ${maxRestarts} seeds. Seed gagnant: ${bestSeed}`);
