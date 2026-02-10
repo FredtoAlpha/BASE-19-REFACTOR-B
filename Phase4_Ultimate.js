@@ -30,6 +30,16 @@ const ULTIMATE_CONFIG_DEFAULTS = {
     headMax: 5,
     niv1Max: 4,
     niv1Min: 0
+  },
+  // Recuit Simulé (Simulated Annealing) — permet de sortir des optima locaux
+  // en acceptant ponctuellement des swaps légèrement dégradants avec une
+  // probabilité décroissante (température qui refroidit).
+  sa: {
+    enabled: true,          // Activer le recuit simulé
+    initialTemp: 50.0,      // Température initiale T₀ (échelle du score)
+    coolingRate: 0.995,      // Facteur de refroidissement géométrique par itération
+    minTemp: 0.1,           // Température plancher (en dessous = glouton pur)
+    maxDegradation: 200.0   // Gain négatif max toléré (sécurité anti-dégradation)
   }
 };
 
@@ -50,6 +60,11 @@ function getUltimateConfig_(ctx) {
       cfg.targets[k] = overrides.targets[k];
     }
   }
+  if (overrides.sa) {
+    for (var k in overrides.sa) {
+      cfg.sa[k] = overrides.sa[k];
+    }
+  }
   return cfg;
 }
 
@@ -65,6 +80,9 @@ var ULTIMATE_CONFIG = ULTIMATE_CONFIG_DEFAULTS;
  * - U3: Config dynamique fusionnée depuis ctx.ultimateConfig
  * - N3: PRNG seedable pour reproductibilité
  * - MR: Multi-restart (5 seeds, garde le meilleur résultat)
+ * - SA: Recuit Simulé — accepte ponctuellement des swaps dégradants
+ *       avec probabilité e^(gain/T), T décroissante. Permet de sortir
+ *       des optima locaux avant de reconverger en glouton pur.
  *
  * @param {Object} ctx - Contexte de l'optimisation
  * @returns {Object} Résultat d'optimisation
@@ -78,6 +96,9 @@ function Phase4_Ultimate_Run(ctx) {
   logLine('INFO', '🚀 Lancement OPTIMUM PRIME ULTIMATE (MULTI-RESTART)...');
   logLine('INFO', '⚖️ Config: ' + JSON.stringify(config.weights));
   logLine('INFO', `🔁 Multi-restart : ${maxRestarts} seeds`);
+  if (config.sa && config.sa.enabled) {
+    logLine('INFO', `🌡️ Recuit Simulé ACTIF : T₀=${config.sa.initialTemp}, cooling=${config.sa.coolingRate}, Tmin=${config.sa.minTemp}`);
+  }
 
   // 1. CHARGEMENT ET CLASSIFICATION (une seule fois)
   const dataResult = loadAndClassifyData_Ultimate(ctx);
@@ -169,6 +190,14 @@ function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx
   let swapsApplied = 0;
   let stagnationCount = 0;
 
+  // --- RECUIT SIMULÉ (Simulated Annealing) ---
+  const saEnabled = config.sa && config.sa.enabled;
+  let temperature = saEnabled ? config.sa.initialTemp : 0;
+  const coolingRate = saEnabled ? config.sa.coolingRate : 1;
+  const minTemp = saEnabled ? config.sa.minTemp : 0;
+  const maxDegradation = saEnabled ? config.sa.maxDegradation : 0;
+  let saAccepted = 0; // Compteur de swaps dégradants acceptés par SA
+
   for (let iter = 0; iter < config.maxSwaps; iter++) {
     const worstClassKey = findWorstClass_Ultimate(byClass, allData, globalStats, ctx);
     if (!worstClassKey) break;
@@ -183,14 +212,65 @@ function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx
     const bestSwap = findBestSwapPrioritized_Ultimate(worstClassKey, partnerClassKey, allData, byClass, headers, globalStats, ctx, rng, config);
 
     if (bestSwap && bestSwap.gain > 0.0001) {
+      // Swap améliorant → toujours accepté (comportement glouton classique)
       applySwap_Ultimate(allData, byClass, bestSwap, headers);
       swapsApplied++;
       stagnationCount = 0;
+    } else if (saEnabled && temperature > minTemp && bestSwap && bestSwap.gain < 0 && bestSwap.gain > -maxDegradation) {
+      // RECUIT SIMULÉ : swap légèrement dégradant, accepter avec probabilité e^(gain/T)
+      // gain est négatif ici, donc la probabilité ∈ (0, 1) et décroît quand T diminue
+      const acceptProbability = Math.exp(bestSwap.gain / temperature);
+      if (rng.next() < acceptProbability) {
+        applySwap_Ultimate(allData, byClass, bestSwap, headers);
+        swapsApplied++;
+        saAccepted++;
+        stagnationCount = 0;
+        if (saAccepted <= 5 || saAccepted % 10 === 0) {
+          logLine('DEBUG', `  🌡️ SA: swap dégradant accepté (gain=${bestSwap.gain.toFixed(4)}, T=${temperature.toFixed(2)}, p=${acceptProbability.toFixed(4)})`);
+        }
+      } else {
+        stagnationCount++;
+      }
     } else {
       stagnationCount++;
     }
 
+    // Refroidissement géométrique de la température
+    if (saEnabled) {
+      temperature *= coolingRate;
+    }
+
     if (stagnationCount >= config.stagnationLimit) break;
+  }
+
+  if (saEnabled) {
+    logLine('INFO', `  🌡️ Recuit Simulé: ${saAccepted} swaps dégradants acceptés, T finale=${temperature.toFixed(4)}`);
+  }
+
+  // Après la phase SA+greedy, relancer une passe glouton pure pour converger
+  // (le SA a pu déplacer la solution dans un nouveau bassin d'attraction)
+  if (saEnabled && saAccepted > 0) {
+    let postSASwaps = 0;
+    let postStagnation = 0;
+    for (let iter2 = 0; iter2 < Math.floor(config.maxSwaps * 0.3); iter2++) {
+      const worstKey = findWorstClass_Ultimate(byClass, allData, globalStats, ctx);
+      if (!worstKey) break;
+      const partnerKey = findPartnerClass_Ultimate(worstKey, byClass, allData, globalStats, rng);
+      if (!partnerKey) { postStagnation++; if (postStagnation > 10) break; continue; }
+      const swap = findBestSwapPrioritized_Ultimate(worstKey, partnerKey, allData, byClass, headers, globalStats, ctx, rng, config);
+      if (swap && swap.gain > 0.0001) {
+        applySwap_Ultimate(allData, byClass, swap, headers);
+        postSASwaps++;
+        swapsApplied++;
+        postStagnation = 0;
+      } else {
+        postStagnation++;
+      }
+      if (postStagnation >= config.stagnationLimit) break;
+    }
+    if (postSASwaps > 0) {
+      logLine('INFO', `  🎯 Post-SA greedy: ${postSASwaps} swaps supplémentaires`);
+    }
   }
 
   // 3-WAY CYCLE SWAPS
@@ -352,6 +432,10 @@ function findBestSwapPrioritized_Ultimate(cls1Name, cls2Name, allData, byClass, 
   let bestSwap = null;
   let maxGain = 0;
 
+  // SA : garder aussi le "moins pire" swap dégradant pour le recuit simulé
+  let leastBadSwap = null;
+  let leastBadGain = -Infinity;
+
   // Tester les paires priorisées (top candidats seulement)
   for (let i = 0; i < candidates1.length; i++) {
     const i1 = candidates1[i];
@@ -385,11 +469,23 @@ function findBestSwapPrioritized_Ultimate(cls1Name, cls2Name, allData, byClass, 
           gain: gain,
           reason: `Swap ${s1.isHead ? 'Tête' : 'Std'}/${s1.isNiv1 ? 'Niv1' : 'Std'}`
         };
+      } else if (gain < 0 && gain > leastBadGain) {
+        // SA : meilleur candidat dégradant (gain négatif le plus proche de 0)
+        leastBadGain = gain;
+        leastBadSwap = {
+          idx1: i1,
+          idx2: i2,
+          cls1: cls1Name,
+          cls2: cls2Name,
+          gain: gain,
+          reason: `SA-Swap ${s1.isHead ? 'Tête' : 'Std'}/${s1.isNiv1 ? 'Niv1' : 'Std'}`
+        };
       }
     }
   }
 
-  return bestSwap;
+  // Si aucun swap améliorant trouvé, renvoyer le moins dégradant pour le recuit simulé
+  return bestSwap || leastBadSwap;
 }
 
 /**
