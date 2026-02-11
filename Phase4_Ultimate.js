@@ -213,6 +213,11 @@ function Phase4_Ultimate_Run(ctx) {
 function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx, config, rng) {
   let swapsApplied = 0;
   let stagnationCount = 0;
+  let noPartnerCount = 0; // TWO-PIPELINE : compteur séparé pour les échecs de partner
+
+  // TWO-PIPELINE : Swap history anti-boucle (porté depuis V3)
+  // Pénalise les élèves déjà swappés pour éviter les cycles A↔B↔A
+  const swapHistory = new Map();
 
   // --- RECUIT SIMULÉ (Simulated Annealing) ---
   const saEnabled = config.sa && config.sa.enabled;
@@ -228,16 +233,28 @@ function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx
 
     const partnerClassKey = findPartnerClass_Ultimate(worstClassKey, byClass, allData, globalStats, rng);
     if (!partnerClassKey) {
-      stagnationCount++;
-      if (stagnationCount > 10) break;
+      noPartnerCount++;
+      // TWO-PIPELINE : ne pas casser la boucle trop tôt sur les échecs partner,
+      // le RNG 20% peut échouer temporairement sans que ce soit une stagnation réelle
+      if (noPartnerCount > 30) break;
       continue;
     }
+    noPartnerCount = 0;
 
     const bestSwap = findBestSwapPrioritized_Ultimate(worstClassKey, partnerClassKey, allData, byClass, headers, globalStats, ctx, rng, config);
+
+    // TWO-PIPELINE : Appliquer la pénalité swap history sur le gain
+    if (bestSwap) {
+      const h1 = swapHistory.get(bestSwap.idx1) || 0;
+      const h2 = swapHistory.get(bestSwap.idx2) || 0;
+      bestSwap.gain = bestSwap.gain / (1 + h1 + h2);
+    }
 
     if (bestSwap && bestSwap.gain > 0.0001) {
       // Swap améliorant → toujours accepté (comportement glouton classique)
       applySwap_Ultimate(allData, byClass, bestSwap, headers);
+      swapHistory.set(bestSwap.idx1, (swapHistory.get(bestSwap.idx1) || 0) + 1);
+      swapHistory.set(bestSwap.idx2, (swapHistory.get(bestSwap.idx2) || 0) + 1);
       swapsApplied++;
       stagnationCount = 0;
     } else if (saEnabled && temperature > minTemp && bestSwap && bestSwap.gain < 0 && bestSwap.gain > -maxDegradation) {
@@ -246,6 +263,8 @@ function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx
       const acceptProbability = Math.exp(bestSwap.gain / temperature);
       if (rng.next() < acceptProbability) {
         applySwap_Ultimate(allData, byClass, bestSwap, headers);
+        swapHistory.set(bestSwap.idx1, (swapHistory.get(bestSwap.idx1) || 0) + 1);
+        swapHistory.set(bestSwap.idx2, (swapHistory.get(bestSwap.idx2) || 0) + 1);
         swapsApplied++;
         saAccepted++;
         stagnationCount = 0;

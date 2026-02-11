@@ -727,6 +727,55 @@ function canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx) {
 }
 
 /**
+ * TWO-PIPELINE PROP3 : Validation DISSO post-restart pour le pipeline V3.
+ * Vérifie qu'aucune classe ne contient 2+ élèves avec le même code DISSO.
+ * Opère sur le tableau data[] en mémoire (pas de lecture sheet).
+ *
+ * @param {Array} data - Tableau 2D [row][col] incluant headers en data[0]
+ * @param {Array} headers - En-têtes (data[0])
+ * @returns {{ ok: boolean, duplicates: Array }}
+ */
+function validateDISSOConstraints_V3_(data, headers) {
+  var idxDISSO = headers.indexOf('DISSO');
+  var idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
+  var idxNom = headers.indexOf('NOM');
+
+  if (idxDISSO === -1 || idxAssigned === -1) {
+    return { ok: true, duplicates: [], message: 'Colonnes DISSO ou _CLASS_ASSIGNED absentes' };
+  }
+
+  var byClassDisso = {};
+  for (var i = 1; i < data.length; i++) {
+    var cls = String(data[i][idxAssigned] || '').trim();
+    if (!cls) continue;
+    var disso = String(data[i][idxDISSO] || '').trim().toUpperCase();
+    if (!disso) continue;
+
+    if (!byClassDisso[cls]) byClassDisso[cls] = {};
+    if (!byClassDisso[cls][disso]) byClassDisso[cls][disso] = { count: 0, noms: [] };
+    byClassDisso[cls][disso].count++;
+    var nom = idxNom >= 0 ? String(data[i][idxNom] || '') : 'Élève ' + i;
+    byClassDisso[cls][disso].noms.push(nom);
+  }
+
+  var duplicates = [];
+  for (var cls in byClassDisso) {
+    for (var code in byClassDisso[cls]) {
+      if (byClassDisso[cls][code].count > 1) {
+        duplicates.push({
+          classe: cls,
+          code: code,
+          count: byClassDisso[cls][code].count,
+          noms: byClassDisso[cls][code].noms
+        });
+      }
+    }
+  }
+
+  return { ok: duplicates.length === 0, duplicates: duplicates };
+}
+
+/**
  * Copie _BASEOPTI vers les onglets CACHE pour affichage live
  */
 function copyBaseoptiToCache_V3(ctx) {
@@ -1119,6 +1168,16 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
 
     logLine('INFO', `    📊 Erreur=${result.finalError.toFixed(2)}, swaps=${result.swapsApplied}+${result.swaps3Way}(3-way)`);
 
+    // TWO-PIPELINE PROP3 : Valider DISSO PAR RESTART — rejeter tout restart invalide
+    const restartValidation = validateDISSOConstraints_V3_(data, headers);
+    if (!restartValidation.ok) {
+      logLine('WARN', `    ❌ Restart ${restart + 1} rejeté : DISSO invalide (${restartValidation.duplicates.length} conflit(s))`);
+      restartValidation.duplicates.forEach(function(dup) {
+        logLine('WARN', `      • ${dup.classe} : ${dup.code} x${dup.count} (${dup.noms.join(', ')})`);
+      });
+      continue; // On ne considère JAMAIS ce restart, même si son erreur est meilleure
+    }
+
     if (result.finalError < bestError) {
       bestError = result.finalError;
       bestData = data;
@@ -1126,8 +1185,22 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
       bestSwaps3Way = result.swaps3Way;
       bestAnnealing = result.annealingUsed;
       bestSeed = seed;
-      logLine('INFO', `    ⭐ Nouveau meilleur ! (erreur=${bestError.toFixed(2)})`);
+      logLine('INFO', `    ⭐ Nouveau meilleur ! (erreur=${bestError.toFixed(2)}, DISSO ✅)`);
     }
+  }
+
+  // TWO-PIPELINE : Si aucun restart n'a passé la validation DISSO
+  if (!bestData) {
+    logLine('ERROR', '❌ AUCUN restart valide (tous rejetés par DISSO). Fallback sur l\'état pré-Phase4.');
+    return {
+      ok: false,
+      swapsApplied: 0,
+      swaps3Way: 0,
+      annealingUsed: 0,
+      seed: 0,
+      restarts: maxRestarts,
+      finalError: Infinity
+    };
   }
 
   // Écrire le meilleur résultat
@@ -1180,14 +1253,16 @@ function runPhase4CoreLoop_V3_(data, headers, hIdx, byClass, weights, maxSwaps, 
   const swapHistory = new Map();
   let swapsApplied = 0;
 
-  // N2: Recuit simulé
-  const annealingBudget = Math.floor(maxSwaps * 0.05);
+  // TWO-PIPELINE : Recuit simulé amélioré (refroidissement géométrique)
+  let saTemperature = 50.0;
+  const saCoolingRate = 0.995;
+  const saMinTemp = 0.1;
+  const saMaxDegradation = 0.02 * currentError; // 2% de l'erreur initiale max
   let annealingUsed = 0;
-  const maxNegativeAccepted = -0.02 * currentError;
 
   const classNames = Object.keys(byClass);
   let stagnation = 0;
-  const stagnationLimit = 40;
+  const stagnationLimit = 50;
 
   for (let iter = 0; iter < maxSwaps; iter++) {
     const candidates = [];
@@ -1240,14 +1315,16 @@ function runPhase4CoreLoop_V3_(data, headers, hIdx, byClass, weights, maxSwaps, 
     let accepted = false;
     if (bestSwap && bestSwap.gain > 1e-6) {
       accepted = true;
-    } else if (bestSwap && bestSwap.gain > maxNegativeAccepted && annealingUsed < annealingBudget) {
-      const temperature = 1.0 - (annealingUsed / annealingBudget);
-      const acceptProba = Math.exp(bestSwap.gain / (temperature * 0.01 * Math.abs(currentError) + 1e-10));
+    } else if (bestSwap && saTemperature > saMinTemp && bestSwap.gain > -saMaxDegradation && bestSwap.gain < 0) {
+      // TWO-PIPELINE : SA géométrique (probabilité e^(gain/T), T décroissante)
+      const acceptProba = Math.exp(bestSwap.gain / saTemperature);
       if (rng.next() < acceptProba) {
         accepted = true;
         annealingUsed++;
       }
     }
+    // Refroidissement géométrique
+    saTemperature *= saCoolingRate;
 
     if (!accepted) {
       stagnation++;
@@ -1272,6 +1349,57 @@ function runPhase4CoreLoop_V3_(data, headers, hIdx, byClass, weights, maxSwaps, 
     swapHistory.set(idx2, (swapHistory.get(idx2) || 0) + 1);
     swapsApplied++;
     currentError = totalError();
+  }
+
+  // TWO-PIPELINE : Post-SA greedy convergence (reconverger dans le nouveau bassin)
+  if (annealingUsed > 0) {
+    logLine('INFO', `    🌡️ SA: ${annealingUsed} swaps dégradants acceptés, T finale=${saTemperature.toFixed(4)}`);
+    let postSASwaps = 0;
+    let postStagnation = 0;
+    for (let iter2 = 0; iter2 < Math.floor(maxSwaps * 0.3); iter2++) {
+      const candidates2 = [];
+      for (const cls2 in byClass) {
+        const classError2 = classStates[cls2].computeError(globalStats, targetDistribution, weights);
+        for (let k2 = 0; k2 < byClass[cls2].length; k2++) {
+          const si2 = byClass[cls2][k2];
+          if (isStudentFixed(si2)) continue;
+          candidates2.push({ idx: si2, cls: cls2, disruption: classError2 });
+        }
+      }
+      const poolSize2 = Math.max(10, Math.floor(candidates2.length * 0.6));
+      candidates2.sort(function(a, b) { return b.disruption - a.disruption; });
+      const pool2 = candidates2.slice(0, poolSize2);
+      let bestSwap2 = null;
+      let bestGain2 = 1e-6;
+      for (let p2 = 0; p2 < Math.min(300, pool2.length * (pool2.length - 1) / 2); p2++) {
+        const s1 = rng.pick(pool2);
+        const s2 = rng.pick(pool2);
+        if (!s1 || !s2 || s1.cls === s2.cls || s1.idx === s2.idx) continue;
+        const chk = canSwapStudents_V3(s1.idx, s1.cls, s2.idx, s2.cls, data, headers, ctx);
+        if (!chk.ok) continue;
+        const errBefore = classStates[s1.cls].computeError(globalStats, targetDistribution, weights) +
+                          classStates[s2.cls].computeError(globalStats, targetDistribution, weights);
+        const errA = classStates[s1.cls].simulateSwap(s1.idx, s2.idx, data, hIdx, globalStats, targetDistribution, weights);
+        const errB = classStates[s2.cls].simulateSwap(s2.idx, s1.idx, data, hIdx, globalStats, targetDistribution, weights);
+        const g = errBefore - (errA + errB);
+        if (g > bestGain2) { bestGain2 = g; bestSwap2 = { idx1: s1.idx, idx2: s2.idx, cls1: s1.cls, cls2: s2.cls }; }
+      }
+      if (!bestSwap2) { postStagnation++; if (postStagnation >= stagnationLimit) break; continue; }
+      postStagnation = 0;
+      classStates[bestSwap2.cls1].applySwap(bestSwap2.idx1, bestSwap2.idx2, data, hIdx);
+      classStates[bestSwap2.cls2].applySwap(bestSwap2.idx2, bestSwap2.idx1, data, hIdx);
+      data[bestSwap2.idx1][hIdx.ASSIGNED] = bestSwap2.cls2;
+      data[bestSwap2.idx2][hIdx.ASSIGNED] = bestSwap2.cls1;
+      const p1 = byClass[bestSwap2.cls1].indexOf(bestSwap2.idx1);
+      const p2b = byClass[bestSwap2.cls2].indexOf(bestSwap2.idx2);
+      if (p1 !== -1) byClass[bestSwap2.cls1].splice(p1, 1, bestSwap2.idx2);
+      if (p2b !== -1) byClass[bestSwap2.cls2].splice(p2b, 1, bestSwap2.idx1);
+      postSASwaps++;
+      swapsApplied++;
+    }
+    if (postSASwaps > 0) {
+      logLine('INFO', `    🎯 Post-SA greedy: ${postSASwaps} swaps supplémentaires`);
+    }
   }
 
   // ===== 3-WAY CYCLE SWAPS =====
