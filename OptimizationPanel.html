@@ -428,7 +428,7 @@ const OptimizationPanel = {
               <i class="fas fa-arrow-left mr-1.5"></i>Précédent
             </button>
             
-            <button onclick="OptimizationPanel.runOptimizationStreaming()" class="px-4 py-1.5 text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg font-medium transition-colors hidden" id="btnRunOptimizationTop">
+            <button onclick="OptimizationPanel.runOptimizationStreaming()" class="px-4 py-1.5 text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg font-medium transition-colors hidden" id="btnRunOptimization">
               <i class="fas fa-rocket mr-1.5"></i>Lancer l'optimisation
             </button>
             
@@ -546,10 +546,16 @@ const OptimizationPanel = {
           <!-- Constraints Tab -->
           <div id="tab-constraints" class="tab-content hidden">
             <h3 class="text-lg font-bold mb-4">🛡️ Contraintes Réglementaires</h3>
-            
-            <div class="space-y-4">
+
+            <!-- CONTRAINTES DURES (non négociables) -->
+            <div class="mb-2">
+              <span class="inline-block px-2 py-1 text-xs font-bold text-white bg-red-600 rounded">BLOQUANT</span>
+              <span class="text-xs text-gray-500 ml-2">Le moteur refuse tout swap qui viole ces règles</span>
+            </div>
+
+            <div class="space-y-3 mb-6">
               <!-- Dissociations -->
-              <div class="bg-red-50 p-4 rounded">
+              <div class="bg-red-50 p-4 rounded border-l-4 border-red-500">
                 <div class="flex justify-between items-center mb-2">
                   <label class="font-bold">
                     <i class="fas fa-ban text-red-600 mr-2"></i>Séparer les dissociations (D)
@@ -559,11 +565,11 @@ const OptimizationPanel = {
                     <span class="slider"></span>
                   </label>
                 </div>
-                <p class="text-xs text-gray-600">Séparer les élèves avec même code D</p>
+                <p class="text-xs text-gray-600">Deux élèves avec le même code D ne peuvent jamais être dans la même classe</p>
               </div>
-              
+
               <!-- Associations -->
-              <div class="bg-green-50 p-4 rounded">
+              <div class="bg-green-50 p-4 rounded border-l-4 border-green-500">
                 <div class="flex justify-between items-center mb-2">
                   <label class="font-bold">
                     <i class="fas fa-users text-green-600 mr-2"></i>Regrouper les associations (A)
@@ -573,7 +579,35 @@ const OptimizationPanel = {
                     <span class="slider"></span>
                   </label>
                 </div>
-                <p class="text-xs text-gray-600">Regrouper les élèves avec même code A</p>
+                <p class="text-xs text-gray-600">Les élèves avec le même code A sont toujours dans la même classe</p>
+              </div>
+
+              <!-- LV2 / OPT (info, pas configurable) -->
+              <div class="bg-gray-50 p-4 rounded border-l-4 border-gray-400">
+                <div class="flex items-center mb-2">
+                  <label class="font-bold">
+                    <i class="fas fa-lock text-gray-500 mr-2"></i>LV2 & Options (quotas)
+                  </label>
+                </div>
+                <p class="text-xs text-gray-600">Chaque élève reste dans une classe compatible avec sa LV2 et son option. Configurable en Phase 2.</p>
+              </div>
+            </div>
+
+            <!-- OBJECTIFS SOUPLES (optimisation) -->
+            <div class="mb-2">
+              <span class="inline-block px-2 py-1 text-xs font-bold text-white bg-blue-500 rounded">OPTIMISATION</span>
+              <span class="text-xs text-gray-500 ml-2">Le moteur cherche le meilleur compromis (ajustable en Phase 4)</span>
+            </div>
+
+            <div class="space-y-2">
+              <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-300 text-sm">
+                <i class="fas fa-chart-bar text-blue-500 mr-2"></i><strong>Scores COM/TRA/PART/ABS</strong> — Équilibre des profils comportementaux entre classes
+              </div>
+              <div class="bg-purple-50 p-3 rounded border-l-4 border-purple-300 text-sm">
+                <i class="fas fa-venus-mars text-purple-500 mr-2"></i><strong>Parité F/M</strong> — Répartition proportionnelle filles/garçons
+              </div>
+              <div class="bg-orange-50 p-3 rounded border-l-4 border-orange-300 text-sm">
+                <i class="fas fa-users text-orange-500 mr-2"></i><strong>Effectifs</strong> — Taille équitable des classes
               </div>
             </div>
           </div>
@@ -581,9 +615,22 @@ const OptimizationPanel = {
           <!-- Scores Tab -->
           <div id="tab-scores" class="tab-content hidden">
             <h3 class="text-lg font-bold mb-4">⚖️ Critères de Score</h3>
-            
+
             <div class="bg-blue-50 p-3 rounded mb-4 text-sm text-blue-700">
-              <i class="fas fa-info-circle mr-2"></i>Ajustez les poids selon vos priorités
+              <i class="fas fa-info-circle mr-2"></i>Choisissez un preset ou ajustez manuellement
+            </div>
+
+            <!-- PRESETS MÉTIER -->
+            <div class="flex gap-2 mb-6">
+              <button onclick="OptimizationPanel.applyPreset('equilibre')" class="flex-1 px-3 py-2 text-sm bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 transition-colors" title="COM=1.0 TRA=0.8 PART=0.5 ABS=0.3 — Le plus polyvalent">
+                <i class="fas fa-balance-scale mr-1"></i>Equilibre
+              </button>
+              <button onclick="OptimizationPanel.applyPreset('comportement')" class="flex-1 px-3 py-2 text-sm bg-gradient-to-r from-red-500 to-orange-600 text-white rounded-lg font-medium hover:from-red-600 hover:to-orange-700 transition-colors" title="COM=1.0 TRA=0.4 PART=0.6 ABS=0.2 — Priorité gestion de classe">
+                <i class="fas fa-exclamation-triangle mr-1"></i>Comportement
+              </button>
+              <button onclick="OptimizationPanel.applyPreset('scolaire')" class="flex-1 px-3 py-2 text-sm bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-600 hover:to-indigo-700 transition-colors" title="COM=0.5 TRA=1.0 PART=0.7 ABS=0.4 — Priorité niveau académique">
+                <i class="fas fa-graduation-cap mr-1"></i>Scolaire
+              </button>
             </div>
             
             <!-- COM -->
@@ -945,7 +992,7 @@ const OptimizationPanel = {
     // Mettre à jour les boutons de navigation (header)
     const btnPrev = document.getElementById('btnPreviousTop');
     const btnNext = document.getElementById('btnNextTop');
-    const btnRun = document.getElementById('btnRunOptimizationTop');
+    const btnRun = document.getElementById('btnRunOptimization');
     
     if (btnPrev) btnPrev.disabled = !phase.prev;
     if (btnNext) btnNext.disabled = !phase.next && phaseName !== 'launch';
@@ -1061,6 +1108,28 @@ const OptimizationPanel = {
    */
   updateWeight(criterion, value) {
     document.getElementById(`poids${criterion}`).textContent = parseFloat(value).toFixed(1);
+  },
+
+  /**
+   * Appliquer un preset métier sur les sliders de score
+   */
+  applyPreset(preset) {
+    const presets = {
+      equilibre:     { COM: 1.0, TRA: 0.8, PART: 0.5, ABS: 0.3 },
+      comportement:  { COM: 1.0, TRA: 0.4, PART: 0.6, ABS: 0.2 },
+      scolaire:      { COM: 0.5, TRA: 1.0, PART: 0.7, ABS: 0.4 }
+    };
+    const values = presets[preset];
+    if (!values) return;
+    ['COM', 'TRA', 'PART', 'ABS'].forEach(k => {
+      const slider = document.getElementById('slider' + k);
+      if (slider) { slider.value = values[k]; }
+      this.updateWeight(k, values[k]);
+    });
+    if (typeof toast === 'function') {
+      const labels = { equilibre: 'Equilibre', comportement: 'Comportement', scolaire: 'Scolaire' };
+      toast('Preset "' + (labels[preset] || preset) + '" appliqué', 'success');
+    }
   },
   
   /**
@@ -2431,18 +2500,60 @@ const OptimizationPanel = {
 
     if (!container) return;
 
-    // ===== HEADER : Résumé succès =====
+    // ===== SCORE GLOBAL 0-100 =====
+    // Calcul basé sur les écarts réels : COM, TRA, PART, ABS + parité
+    let globalScore = 100;
+    let scoreDetails = [];
+    if (scores && Object.keys(scores).length > 0) {
+      const classes = Object.keys(scores);
+      const metrics = ['COM', 'TRA', 'PART', 'ABS'];
+      const thresholds = { COM: 0.30, TRA: 0.30, PART: 0.60, ABS: 0.60 };
+      metrics.forEach(m => {
+        const vals = classes.map(c => parseFloat(scores[c][m] || 0));
+        const ecart = Math.max(...vals) - Math.min(...vals);
+        const penalty = Math.min(15, Math.round((ecart / thresholds[m]) * 15));
+        globalScore -= penalty;
+        if (penalty > 5) scoreDetails.push(m + ' (-' + penalty + ')');
+      });
+    }
+    if (audit && Object.keys(audit).length > 0) {
+      const classes = Object.keys(audit);
+      let totalF = 0, totalM = 0;
+      classes.forEach(c => { totalF += audit[c].F || 0; totalM += audit[c].M || 0; });
+      const globalRatioF = totalF / (totalF + totalM);
+      let maxParityDelta = 0;
+      classes.forEach(c => {
+        const t = (audit[c].F || 0) + (audit[c].M || 0);
+        maxParityDelta = Math.max(maxParityDelta, Math.abs((audit[c].F || 0) - Math.round(t * globalRatioF)));
+      });
+      const parityPenalty = Math.min(20, maxParityDelta * 5);
+      globalScore -= parityPenalty;
+      if (parityPenalty > 5) scoreDetails.push('Parité (-' + parityPenalty + ')');
+    }
+    globalScore = Math.max(0, Math.min(100, globalScore));
+    const scoreColor = globalScore >= 80 ? 'green' : globalScore >= 60 ? 'yellow' : 'red';
+    const scoreEmoji = globalScore >= 80 ? 'A' : globalScore >= 60 ? 'B' : 'C';
+    const scoreLabel = globalScore >= 80 ? 'Excellente répartition' : globalScore >= 60 ? 'Répartition correcte' : 'Répartition à améliorer';
+
+    // ===== HEADER : Résumé succès + Score global =====
     let html = `
       <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-        <h4 class="font-semibold text-green-800 mb-2">
-          <i class="fas fa-check-circle mr-2"></i>Optimisation réussie en ${duration}s
-        </h4>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-semibold text-green-800">
+            <i class="fas fa-check-circle mr-2"></i>Optimisation réussie en ${duration}s
+          </h4>
+          <div class="text-center">
+            <div class="text-3xl font-black text-${scoreColor}-600">${globalScore}</div>
+            <div class="text-xs font-semibold text-${scoreColor}-700">/100 — ${scoreLabel}</div>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-2 text-sm">
           <div><strong>Phase 1:</strong> ITA=${p1.counts?.ITA || 0}, CHAV=${p1.counts?.CHAV || 0}</div>
           <div><strong>Phase 2:</strong> ${p2.asso || 0} ASSO, ${p2.disso || 0} DISSO</div>
           <div><strong>Phase 3:</strong> Effectifs équilibrés</div>
           <div><strong>Phase 4:</strong> ${p4.swaps || 0} swaps</div>
         </div>
+        ${scoreDetails.length > 0 ? '<div class="text-xs text-gray-500 mt-2">Points perdus : ' + scoreDetails.join(', ') + '</div>' : ''}
       </div>
     `;
 
