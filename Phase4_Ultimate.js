@@ -341,8 +341,13 @@ function runPhase4CoreLoop_Ultimate_(allData, byClass, headers, globalStats, ctx
         const c = rng.pick(byClass[c3]);
         if (isFixed(allData[a]) || isFixed(allData[b]) || isFixed(allData[c])) continue;
 
+        // 3-WAY CYCLE : a:c1→c2, b:c2→c3, c:c3→c1
+        // Chaque check bilatéral vérifie les deux directions du swap.
+        // Les 3 checks couvrent les 3 mouvements réels (+ 3 checks conservateurs).
+        // Sans le 3e check, c→c1 n'était JAMAIS validé (bug critique DISSO/LV2).
         if (!canSwapStudents_Ultimate(a, b, c1, c2, byClass[c1], byClass[c2], allData, headers, ctx)) continue;
         if (!canSwapStudents_Ultimate(b, c, c2, c3, byClass[c2], byClass[c3], allData, headers, ctx)) continue;
+        if (!canSwapStudents_Ultimate(c, a, c3, c1, byClass[c3], byClass[c1], allData, headers, ctx)) continue;
 
         const tempC1 = byClass[c1].filter(x => x !== a).concat([c]);
         const tempC2 = byClass[c2].filter(x => x !== b).concat([a]);

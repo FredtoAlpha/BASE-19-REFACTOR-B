@@ -92,8 +92,8 @@ function legacy_runPhase_fromUI(phase) {
         resultMessage = "Effectifs & Parité équilibrés.";
         break;
       case 'phase4':
-        Phase4_balanceScoresSwaps_(ctx);
-        resultMessage = "Équilibrage des scores terminé.";
+        Phase4_Ultimate_Run(ctx);
+        resultMessage = "Équilibrage des scores terminé (ULTIMATE).";
         break;
       default:
         throw new Error("Phase inconnue: " + phase);
