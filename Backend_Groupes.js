@@ -23,65 +23,7 @@ const GROUPS_CONFIG = {
   }
 };
 
-/**
- * Charge les données depuis les onglets FIN avec scores
- * @returns {Object} Les données avec scores
- */
-function loadFINSheetsWithScores() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const finSheets = ss.getSheets().filter(s => s.getName().endsWith('FIN'));
-
-    const result = {
-      success: true,
-      data: {}
-    };
-
-    finSheets.forEach(sheet => {
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) return;
-
-      const headers = data[0];
-      const scoreUIndex = headers.indexOf(GROUPS_CONFIG.scoreColumns.scoreF);
-      const scoreVIndex = headers.indexOf(GROUPS_CONFIG.scoreColumns.scoreM);
-
-      const students = [];
-
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        if (!row[0]) continue;
-
-        const student = {
-          id: String(row[0]).trim(),
-          nom: String(row[1] || '').trim(),
-          prenom: String(row[2] || '').trim(),
-          scores: {
-            female: scoreUIndex >= 0 ? Number(row[scoreUIndex]) || 0 : 0,
-            male: scoreVIndex >= 0 ? Number(row[scoreVIndex]) || 0 : 0
-          },
-          rawRow: row
-        };
-
-        students.push(student);
-      }
-
-      result.data[sheet.getName()] = {
-        eleves: students,
-        count: students.length,
-        timestamp: new Date().getTime()
-      };
-    });
-
-    return result;
-  } catch (e) {
-    Logger.log(`[ERROR] loadFINSheetsWithScores: ${e.toString()}`);
-    return {
-      success: false,
-      error: e.toString(),
-      data: {}
-    };
-  }
-}
+// loadFINSheetsWithScores() → supprimée (définition canonique dans Code.js avec SHEET_PATTERNS.FIN + SCORE_COLUMNS)
 
 /**
  * Sauvegarde une configuration de groupes

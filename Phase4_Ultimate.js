@@ -981,13 +981,7 @@ function saveResults_Ultimate(ss, allData, byClass, headersRef) {
   };
 }
 
-/**
- * Utilitaire de logging
- */
-function logLine(type, msg) {
-  const timestamp = new Date().toLocaleTimeString('fr-FR');
-  Logger.log(`[${timestamp}] [${type}] ${msg}`);
-}
+// logLine() → supprimée (définition canonique dans App.Core.js)
 
 /**
  * 🔍 VALIDATION FINALE : Vérifie qu'il n'y a pas de codes DISSO dupliqués dans les classes

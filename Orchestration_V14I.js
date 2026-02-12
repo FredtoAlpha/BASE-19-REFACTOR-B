@@ -2,6 +2,7 @@
  * ===================================================================
  * ORCHESTRATION V14I - NOUVEAU SYSTÈME
  * ===================================================================
+ * Version: 1.1.0 — SAFE: suppression des ~30 fonctions en collision
  *
  * Architecture incrémentale correcte :
  *
@@ -11,11 +12,36 @@
  * 4. Après CHAQUE phase : affiche les onglets CACHE dans l'UI
  * 5. Phase 4 (swaps) respecte TOUS les verrous
  *
- * INVARIANTS :
- * - LECTURE : toujours depuis l'onglet sélectionné (TEST/FIN/CACHE/...)
- * - ÉCRITURE : exclusivement dans ...CACHE
- * - UI : reload forcé après chaque phase
- * - Swaps : ne cassent jamais Options/LV2/DISSO/ASSO/Parité/Quotas
+ * FONCTIONS SUPPRIMÉES (définitions canoniques dans App.*.js) :
+ *
+ * → App.Context.js :
+ *   makeCtxFromUI_, readModeFromUI_, readNiveauxFromUI_,
+ *   readQuotasFromUI_, readSourceToDestMapping_, readTargetsFromUI_,
+ *   readParityToleranceFromUI_, readMaxSwapsFromUI_,
+ *   buildClassOffers_, computeAllow_, buildOfferWithQuotas_
+ *
+ * → App.CacheManager.js :
+ *   forceCacheInUIAndReload_, setInterfaceModeCACHE_,
+ *   activateFirstCacheTabIfAny_, triggerUIReloadFromCACHE_,
+ *   readElevesFromSelectedMode_, readElevesFromCache_, openCacheTabs_
+ *
+ * → App.Core.js :
+ *   logLine, _u_, _arr, parseCodes_, findEleveByGenre_,
+ *   isPlacementLV2OPTOK_, calculateClassScores_LEGACY_,
+ *   calculateClassMetric_LEGACY_, computeCountsFromState_,
+ *   isMoveAllowed_, eligibleForSwap_LEGACY_, isSwapValid_LEGACY_,
+ *   computeMobilityStats_LEGACY_, isEleveMobile_LEGACY_,
+ *   calculateSwapScore_LEGACY_, computeClassState_LEGACY_,
+ *   simulateSwapState_LEGACY_
+ *
+ * FONCTIONS CONSERVÉES (uniques ou divergentes, Orchestration gagne) :
+ *   makeCtxFromSourceSheets_, readClassAuthorizationsFromUI_,
+ *   readQuotasFromStructure_, readTargetsFromStructure_,
+ *   readElevesFromSheet_, writeAllClassesToCACHE_,
+ *   announcePhaseDone_, ensureColumn_, computeMobilityFlags_,
+ *   auditCacheAgainstStructure_, buildOffersFromStructure_,
+ *   findBestSwap_LEGACY_, applyParityGuardrail_LEGACY_,
+ *   swapEleves_, toutes les fonctions Phase*, Wrapper, etc.
  *
  * ===================================================================
  */
@@ -181,39 +207,7 @@ function makeCtxFromSourceSheets_() {
 // charge tous les fichiers .js dans le scope global.
 // ===================================================================
 
-/**
- * Écrit des valeurs et vérifie. headerRow=1 si tu as des entêtes, sinon 0.
- */
-function writeAndVerify_(sheetName, rangeStartRow, rangeStartCol, values, headerRow) {
-  const sh = getOrCreateSheet_(sheetName);
-
-  if (headerRow) {
-    // On ne touche pas l'entête ; on efface le dessous
-    const lastRow = sh.getLastRow();
-    if (lastRow > headerRow) {
-      sh.getRange(headerRow + 1, 1, lastRow - headerRow, sh.getMaxColumns()).clearContent();
-    }
-  } else {
-    sh.clearContents();
-  }
-
-  if (values && values.length && values[0] && values[0].length) {
-    sh.getRange(rangeStartRow, rangeStartCol, values.length, values[0].length).setValues(values);
-  }
-
-  SpreadsheetApp.flush();
-  Utilities.sleep(100);
-
-  // ✅ Vérification: au moins 1 ligne écrite sous l'entête si headerRow=1
-  const rows = sh.getLastRow();
-  const ok = headerRow ? (rows > headerRow) : (rows > 0);
-  if (!ok) {
-    throw new Error('WRITE_FAILED: rien d\'écrit dans ' + sheetName);
-  }
-
-  logLine('INFO', '✅ Écriture vérifiée dans ' + sheetName + ' (' + (rows - (headerRow || 0)) + ' lignes)');
-  return sh;
-}
+// writeAndVerify_() → supprimée (définition canonique dans App.SheetsData.js)
 
 // ===================================================================
 // 1. ORCHESTRATEUR PRINCIPAL
@@ -396,365 +390,29 @@ function runOptimizationV14FullI(options) {
 // 2. CONSTRUCTION DU CONTEXTE DEPUIS L'INTERFACE
 // ===================================================================
 
-/**
- * Construit le contexte d'exécution depuis l'interface UI
- * Lit TOUS les paramètres : structure, quotas, cibles, tolérances
- */
-function makeCtxFromUI_(options) {
-  const ss = getActiveSS_();
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Context.js :
+//  - makeCtxFromUI_()
+//  - readModeFromUI_()
+//  - readNiveauxFromUI_()
+//  - readQuotasFromUI_()
+// ===================================================================
 
-  // Lire le mode source depuis options ou UI (TEST/FIN/CACHE/...)
-  const modeSrc = (options && options.sourceFamily) ? String(options.sourceFamily).trim() : (readModeFromUI_() || 'TEST');
+// readQuotasFromStructure_() → supprimée (définition canonique dans App.SheetsData.js)
 
-  // Le target est CACHE pour l'optimisation, mais peut être personnalisé (ex: TEST pour pipeline LEGACY)
-  const writeTarget = (options && options.targetFamily) ? String(options.targetFamily).trim() : 'CACHE';
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Context.js :
+//  - readSourceToDestMapping_()
+//  - readTargetsFromUI_()
+// ===================================================================
 
-  // Lire les niveaux à traiter (dynamiquement depuis _STRUCTURE ou _CONFIG)
-  const niveaux = (typeof genererNiveauxDynamiques === 'function')
-    ? genererNiveauxDynamiques()
-    : (readNiveauxFromUI_() || ['6°1', '6°2', '6°3', '6°4', '6°5']);
+// readTargetsFromStructure_() → supprimée (définition canonique dans App.SheetsData.js)
 
-  // ✅ Construire les noms de feuilles avec les helpers (suffixe uniquement)
-  const srcSheets = makeSheetsList_(niveaux, modeSrc);     // ['6°1TEST', '6°2TEST', ...]
-  const cacheSheets = makeSheetsList_(niveaux, writeTarget); // ['6°1CACHE', '6°2CACHE', ...]
-
-  logLine('INFO', '📋 Contexte: Source=' + modeSrc + ', Target=' + writeTarget);
-  logLine('INFO', '📋 Onglets source: ' + srcSheets.join(', '));
-  logLine('INFO', '📋 Onglets cible: ' + cacheSheets.join(', '));
-
-  // Lire les quotas par classe depuis l'interface
-  const quotas = readQuotasFromUI_();
-
-  // Lire les cibles d'effectifs par classe
-  const targets = readTargetsFromUI_();
-
-  // Lire la tolérance de parité
-  const tolParite = readParityToleranceFromUI_() || 2;
-
-  // Lire le nombre max de swaps depuis options ou UI
-  const maxSwaps = (options && options.maxSwaps) ? parseInt(options.maxSwaps) : (readMaxSwapsFromUI_() || 500);
-
-  // Lire les autorisations de classes pour options/LV2
-  const autorisations = readClassAuthorizationsFromUI_();
-
-  return {
-    ss,
-    modeSrc,
-    writeTarget,
-    niveaux,
-    srcSheets,
-    cacheSheets,
-    quotas,
-    targets,
-    tolParite,
-    maxSwaps,
-    autorisations
-  };
-}
-
-/**
- * @deprecated Cette fonction est obsolète. Le mode est maintenant géré par l'interface web (localStorage).
- * @see InterfaceV2.html - STATE.currentMode
- * 
- * Lit le mode de travail depuis l'interface (legacy).
- * Retourne toujours 'TEST' car la lecture de cellule UI est obsolète.
- * 
- * ⚠️ LEGACY : Cette fonction ne lit plus l'interface réelle.
- * Le mode est maintenant géré côté client dans InterfaceV2.html via localStorage.
- */
-function readModeFromUI_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const uiSheet = ss.getSheetByName('_INTERFACE_V2') || ss.getSheetByName('UI_Config');
-  if (!uiSheet) return 'TEST';
-
-  // ⚠️ LEGACY : Lecture de cellule UI obsolète
-  // Le mode est maintenant géré par l'interface web (localStorage)
-  try {
-    const value = uiSheet.getRange('B2').getValue();
-    return String(value).trim() || 'TEST';
-  } catch (e) {
-    return 'TEST';
-  }
-}
-
-/**
- * @deprecated Cette fonction est obsolète. Utiliser genererNiveauxDynamiques() à la place.
- * @see genererNiveauxDynamiques() dans NiveauxDynamiques.gs
- *
- * Lit les niveaux à traiter depuis l'interface (legacy).
- * Retourne des valeurs codées en dur pour compatibilité.
- *
- * ⚠️ LEGACY : Cette fonction retourne des valeurs hardcodées.
- * Les niveaux doivent maintenant être lus dynamiquement via genererNiveauxDynamiques().
- */
-function readNiveauxFromUI_() {
-  // ⚠️ LEGACY : Valeurs codées en dur pour compatibilité ascendante
-  // IMPORTANT : Cette fonction ne doit plus être utilisée
-  // Utiliser genererNiveauxDynamiques() pour une lecture dynamique
-  if (typeof logLine === 'function') {
-    logLine('WARN', '⚠️ readNiveauxFromUI_() est obsolète, utilisez genererNiveauxDynamiques()');
-  }
-  return ['6°1', '6°2', '6°3', '6°4', '6°5'];
-}
-
-/**
- * Lit les quotas par classe depuis l'interface
- * Format attendu : { "6°1": { ITA: 6, CHAV: 0, LV2_ESP: 3, ... }, ... }
- */
-function readQuotasFromUI_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Essayer de lire depuis _STRUCTURE
-  const structSheet = ss.getSheetByName('_STRUCTURE');
-  if (structSheet) {
-    return readQuotasFromStructure_(structSheet);
-  }
-
-  // Sinon, retour valeurs par défaut
-  return {
-    "6°1": { ITA: 6 },
-    "6°2": {},
-    "6°3": { CHAV: 10 },
-    "6°4": {},
-    "6°5": {}
-  };
-}
-
-/**
- * Lit les quotas depuis la feuille _STRUCTURE
- * Parse la colonne OPTIONS au format "ITA=6,CHAV=10,ESP=5"
- */
-function readQuotasFromStructure_(sheet) {
-  const quotas = {};
-
-  try {
-    const data = sheet.getDataRange().getValues();
-    
-    // ✅ CORRECTION : Recherche dynamique de l'en-tête (tolère lignes de garde/metadata)
-    let headerRow = -1;
-    for (let i = 0; i < Math.min(20, data.length); i++) {
-      const row = data[i];
-      // Chercher une ligne contenant CLASSE_DEST ou CLASSE_ORIGINE
-      for (let j = 0; j < row.length; j++) {
-        const cell = String(row[j] || '').trim().toUpperCase();
-        if (cell === 'CLASSE_DEST' || cell === 'CLASSE_ORIGINE') {
-          headerRow = i;
-          break;
-        }
-      }
-      if (headerRow !== -1) break;
-    }
-    
-    if (headerRow === -1) {
-      logLine('WARN', '⚠️ En-têtes non trouvés dans _STRUCTURE (cherché dans les 20 premières lignes)');
-      return quotas;
-    }
-    
-    logLine('INFO', '✅ En-tête trouvé à la ligne ' + (headerRow + 1));
-    
-    const headers = data[headerRow];
-
-    // ✅ Trouver la colonne CLASSE_DEST et OPTIONS
-    const classeCol = headers.indexOf('CLASSE_DEST');
-    const optionsCol = headers.indexOf('OPTIONS');
-
-    logLine('INFO', '🔍 readQuotasFromStructure: classeCol=' + classeCol + ', optionsCol=' + optionsCol);
-
-    if (classeCol === -1 || optionsCol === -1) {
-      logLine('WARN', '⚠️ Colonnes CLASSE_DEST ou OPTIONS introuvables dans _STRUCTURE');
-      return quotas;
-    }
-
-    // Parcourir les lignes (à partir de headerRow + 1)
-    for (let i = headerRow + 1; i < data.length; i++) {
-      const row = data[i];
-      const classe = String(row[classeCol] || '').trim();
-      if (!classe) continue;
-
-      const optionsStr = String(row[optionsCol] || '').trim();
-      logLine('INFO', '🔍 readQuotasFromStructure: ' + classe + ' → OPTIONS="' + optionsStr + '"');
-
-      quotas[classe] = {};
-
-      // ✅ Parser le format "ITA=6,CHAV=10,ESP=5"
-      if (optionsStr) {
-        optionsStr.split(',').forEach(function(pair) {
-          const parts = pair.split('=');
-          if (parts.length === 2) {
-            const optName = parts[0].trim().toUpperCase();
-            const optValue = parseInt(parts[1].trim()) || 0;
-            quotas[classe][optName] = optValue;
-            logLine('INFO', '  ✅ ' + classe + '.' + optName + ' = ' + optValue);
-          }
-        });
-      }
-    }
-
-  } catch (e) {
-    logLine('WARN', 'Erreur lecture quotas depuis _STRUCTURE : ' + e.message);
-  }
-
-  return quotas;
-}
-
-/**
- * Lit le mapping CLASSE_ORIGINE → CLASSE_DEST depuis _STRUCTURE
- * @returns {Object} Mapping { "6°1": "5°1", "6°2": "5°2", ... }
- */
-function readSourceToDestMapping_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const structSheet = ss.getSheetByName('_STRUCTURE');
-  const mapping = {};
-
-  if (!structSheet) {
-    return mapping;
-  }
-
-  try {
-    const data = structSheet.getDataRange().getValues();
-
-    // Recherche de l'en-tête
-    let headerRow = -1;
-    for (let i = 0; i < Math.min(20, data.length); i++) {
-      const row = data[i];
-      for (let j = 0; j < row.length; j++) {
-        const cell = String(row[j] || '').trim().toUpperCase();
-        if (cell === 'CLASSE_DEST' || cell === 'CLASSE_ORIGINE') {
-          headerRow = i;
-          break;
-        }
-      }
-      if (headerRow !== -1) break;
-    }
-
-    if (headerRow === -1) {
-      logLine('WARN', '⚠️ En-têtes non trouvés dans _STRUCTURE');
-      return mapping;
-    }
-
-    const headers = data[headerRow];
-    const origineCol = headers.indexOf('CLASSE_ORIGINE');
-    const destCol = headers.indexOf('CLASSE_DEST');
-
-    if (origineCol === -1 || destCol === -1) {
-      logLine('WARN', '⚠️ Colonnes CLASSE_ORIGINE ou CLASSE_DEST introuvables');
-      return mapping;
-    }
-
-    // Lire le mapping
-    for (let i = headerRow + 1; i < data.length; i++) {
-      const row = data[i];
-      const origine = String(row[origineCol] || '').trim();
-      const dest = String(row[destCol] || '').trim();
-
-      if (origine && dest) {
-        mapping[origine] = dest;
-        logLine('INFO', '  📌 Mapping: ' + origine + ' → ' + dest);
-      }
-    }
-
-  } catch (e) {
-    logLine('WARN', 'Erreur lecture mapping depuis _STRUCTURE : ' + e.message);
-  }
-
-  return mapping;
-}
-
-/**
- * Lit les cibles d'effectifs par classe depuis l'interface
- * ✅ Lit depuis _STRUCTURE si disponible
- */
-function readTargetsFromUI_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Essayer de lire depuis _STRUCTURE
-  const structSheet = ss.getSheetByName('_STRUCTURE');
-  if (structSheet) {
-    return readTargetsFromStructure_(structSheet);
-  }
-
-  // Sinon, valeurs par défaut : 25 élèves par classe
-  return {
-    "6°1": 25,
-    "6°2": 25,
-    "6°3": 25,
-    "6°4": 25,
-    "6°5": 25
-  };
-}
-
-/**
- * Lit les effectifs cibles depuis _STRUCTURE
- * Lit la colonne EFFECTIF pour chaque classe
- */
-function readTargetsFromStructure_(sheet) {
-  const targets = {};
-
-  try {
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-
-    // ✅ Trouver la colonne CLASSE_DEST et EFFECTIF
-    const classeCol = headers.indexOf('CLASSE_DEST');
-    const effectifCol = headers.indexOf('EFFECTIF');
-
-    logLine('INFO', '🔍 readTargetsFromStructure: classeCol=' + classeCol + ', effectifCol=' + effectifCol);
-
-    if (classeCol === -1 || effectifCol === -1) {
-      logLine('WARN', '⚠️ Colonnes CLASSE_DEST ou EFFECTIF introuvables dans _STRUCTURE');
-      return targets;
-    }
-
-    // Parcourir les lignes
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const classe = String(row[classeCol] || '').trim();
-      if (!classe) continue;
-
-      const effectif = parseInt(row[effectifCol]) || 25; // Fallback 25
-      targets[classe] = effectif;
-
-      logLine('INFO', '  ✅ ' + classe + ' effectif cible = ' + effectif);
-    }
-
-  } catch (e) {
-    logLine('WARN', 'Erreur lecture effectifs depuis _STRUCTURE : ' + e.message);
-  }
-
-  return targets;
-}
-
-/**
- * @deprecated Cette fonction est obsolète. Utiliser buildCtx_V2() à la place.
- * @see buildCtx_V2() dans BASEOPTI_Architecture_V3.gs
- * 
- * Lit la tolérance de parité depuis l'interface (legacy).
- * Retourne une valeur codée en dur (2).
- * 
- * ⚠️ LEGACY : Cette fonction ne lit plus l'interface réelle.
- * La tolérance de parité est maintenant lue depuis _OPTI_CONFIG (colonne TOL_PARITE).
- */
-function readParityToleranceFromUI_() {
-  // ⚠️ LEGACY : Valeur codée en dur
-  // La tolérance est maintenant lue depuis _OPTI_CONFIG
-  return 2;
-}
-
-/**
- * @deprecated Cette fonction est obsolète. Utiliser buildCtx_V2() à la place.
- * @see buildCtx_V2() dans BASEOPTI_Architecture_V3.gs
- * 
- * Lit le nombre max de swaps depuis l'interface (legacy).
- * Retourne une valeur codée en dur (500).
- * 
- * ⚠️ LEGACY : Cette fonction ne lit plus l'interface réelle.
- * Le max swaps est maintenant lu depuis _OPTI_CONFIG (colonne MAX_SWAPS).
- */
-function readMaxSwapsFromUI_() {
-  // ⚠️ LEGACY : Valeur codée en dur
-  // Le max swaps est maintenant lu depuis _OPTI_CONFIG
-  return 500;
-}
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Context.js :
+//  - readParityToleranceFromUI_()
+//  - readMaxSwapsFromUI_()
+// ===================================================================
 
 /**
  * @deprecated Cette fonction est obsolète. Utiliser buildCtx_V2() à la place.
@@ -781,276 +439,34 @@ function readClassAuthorizationsFromUI_() {
 // 3. UI : FORCER L'AFFICHAGE DES ONGLETS CACHE
 // ===================================================================
 
-/**
- * Force l'affichage des onglets CACHE dans l'interface
- * et déclenche un reload côté front
- */
-function forceCacheInUIAndReload_(ctx) {
-  try {
-    // 1. Sélectionner le mode CACHE dans l'état UI
-    setInterfaceModeCACHE_(ctx);
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.CacheManager.js :
+//  - forceCacheInUIAndReload_()
+//  - setInterfaceModeCACHE_()
+//  - activateFirstCacheTabIfAny_()
+//  - triggerUIReloadFromCACHE_()
+// ===================================================================
 
-    // 2. Activer visuellement le premier onglet CACHE
-    activateFirstCacheTabIfAny_(ctx);
-
-    // 3. Toast pour informer l'utilisateur
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-      'Onglets CACHE mis à jour',
-      'Optimisation V14I',
-      3
-    );
-
-    // 4. Trigger côté front (si HTML/JS)
-    triggerUIReloadFromCACHE_();
-
-  } catch (e) {
-    logLine('WARN', 'forceCacheInUIAndReload_ failed: ' + e.message);
-  }
-}
-
-/**
- * Marque le mode CACHE comme actif dans l'interface
- */
-function setInterfaceModeCACHE_(ctx) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const uiSheet = ss.getSheetByName('_INTERFACE_V2') || ss.getSheetByName('UI_Config');
-  if (!uiSheet) return;
-
-  try {
-    // ⚠️ LEGACY : Écriture de cellule UI obsolète
-    // Le mode est maintenant géré par l'interface web (localStorage)
-    uiSheet.getRange('B2').setValue('CACHE');
-  } catch (e) {
-    logLine('WARN', 'setInterfaceModeCACHE_ failed: ' + e.message);
-  }
-}
-
-/**
- * Active visuellement le premier onglet CACHE
- */
-function activateFirstCacheTabIfAny_(ctx) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const firstName = ctx.cacheSheets && ctx.cacheSheets[0];
-  if (firstName) {
-    const sheet = ss.getSheetByName(firstName);
-    if (sheet) ss.setActiveSheet(sheet);
-  }
-}
-
-/**
- * Déclenche un reload côté front (HTML/JS)
- */
-function triggerUIReloadFromCACHE_() {
-  // Côté Apps Script : no-op
-  // Côté front (HTML/JS) : ajouter un handler
-  // google.script.run.withSuccessHandler(() => {/* repaint */}).refreshFromCACHE();
-}
-
-/**
- * Affiche une annonce de fin de phase
- */
-function announcePhaseDone_(message) {
-  logLine('INFO', '✅ ' + message);
-  SpreadsheetApp.getActiveSpreadsheet().toast(message, 'Phase terminée', 2);
-}
+// announcePhaseDone_() → supprimée (définition canonique dans App.UIBridge.js)
 
 // ===================================================================
 // 4. LECTURE / ÉCRITURE DES DONNÉES
 // ===================================================================
 
-/**
- * Lit les élèves depuis les feuilles sélectionnées (mode source)
- * @param {Array<string>} sheetNames - Noms des feuilles à lire
- * @returns {Object} État des classes { "6°1": [...eleves], ... }
- */
-function readElevesFromSelectedMode_(ctx) {
-  const classesState = {};
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.CacheManager.js :
+//  - readElevesFromSelectedMode_()
+//  - readElevesFromCache_()
+// ===================================================================
 
-  // 🔒 GARDE-FOU : garantir un tableau exploitable
-  let srcList = ctx && Array.isArray(ctx.srcSheets) ? ctx.srcSheets : null;
-  if (!srcList) {
-    if (ctx && typeof ctx.srcSheets === 'string') {
-      srcList = ctx.srcSheets.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    } else {
-      // reconstruction à partir du ctx si nécessaire
-      const tag = (ctx.mode || ctx.sourceTag || 'TEST').toString().trim();
-      const lv  = Array.isArray(ctx.levels) ? ctx.levels : [];
-      srcList = lv.map(function(l) { return l + tag; });
-    }
-    ctx.srcSheets = srcList; // pour les appels suivants
-  }
-
-  for (const sheetName of srcList) {
-    const sheet = ctx.ss.getSheetByName(sheetName);
-    if (!sheet) {
-      logLine('WARN', 'Feuille source ' + sheetName + ' introuvable');
-      continue;
-    }
-
-    const eleves = readElevesFromSheet_(sheet);
-
-    // ✅ FIX: Utiliser le mapping pour obtenir le nom de classe de destination
-    let niveau;
-    if (ctx.sourceToDestMapping && ctx.sourceToDestMapping[sheetName]) {
-      // Mode LEGACY avec mapping : utiliser la destination
-      niveau = ctx.sourceToDestMapping[sheetName];
-      logLine('INFO', '  📌 Lecture ' + sheetName + ' → assignation à ' + niveau);
-    } else {
-      // Mode normal : retirer le suffixe
-      niveau = sheetName.replace(ctx.modeSrc || 'TEST', '');
-    }
-
-    classesState[niveau] = eleves;
-  }
-
-  return classesState;
-}
-
-/**
- * Lit les élèves depuis les feuilles CACHE
- * UTILISÉ PAR PHASE4 pour lire les résultats des phases 1/2/3
- * @returns {Object} État des classes { "6°1": [...eleves], ... }
- */
-function readElevesFromCache_(ctx) {
-  const classesState = {};
-
-  // ✅ FIX: Construire mapping onglet → niveau depuis ctx
-  const sheetToNiveau = {};
-  for (let i = 0; i < (ctx.cacheSheets || []).length; i++) {
-    sheetToNiveau[ctx.cacheSheets[i]] = ctx.niveaux[i];
-  }
-
-  for (const sheetName of ctx.cacheSheets) {
-    const sheet = ctx.ss.getSheetByName(sheetName);
-    if (!sheet) {
-      logLine('WARN', 'Feuille CACHE ' + sheetName + ' introuvable');
-      continue;
-    }
-
-    const eleves = readElevesFromSheet_(sheet);
-    // ✅ FIX: Utiliser le mapping au lieu du regex /CACHE$/
-    const niveau = sheetToNiveau[sheetName] || sheetName.replace(/CACHE$/, '');
-    classesState[niveau] = eleves;
-  }
-
-  return classesState;
-}
-
-/**
- * Lit les élèves d'une feuille
- */
-function readElevesFromSheet_(sheet) {
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return [];
-
-  const headers = data[0];
-  const eleves = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0]) continue; // Ligne vide
-
-    const eleve = {};
-    headers.forEach((h, j) => {
-      eleve[h] = row[j];
-    });
-    eleves.push(eleve);
-  }
-
-  return eleves;
-}
-
-/**
- * Écrit tous les états de classes dans les onglets CACHE
- * PURGE d'abord les feuilles CACHE, puis écrit
- * Vérifie l'unicité des IDs après écriture
- */
-function writeAllClassesToCACHE_(ctx, classesState) {
-  // 1. Purger les feuilles CACHE
-  clearSheets_(ctx);
-
-  // ✅ FIX: Construire mapping niveau → nom onglet depuis ctx
-  const niveauToSheet = {};
-  for (let i = 0; i < (ctx.niveaux || []).length; i++) {
-    niveauToSheet[ctx.niveaux[i]] = ctx.cacheSheets[i];
-  }
-
-  // 2. Écrire les nouvelles données
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    // ✅ FIX: Utiliser le mapping au lieu de coder en dur 'CACHE'
-    const sheetName = niveauToSheet[niveau] || (niveau + (ctx.writeTarget || 'CACHE'));
-    writeElevesToSheet_(ctx.ss, sheetName, eleves);
-
-    // 3. Vérifier l'unicité des IDs
-    const uniqueIds = new Set();
-    eleves.forEach(function(e) {
-      const id = String(e._ID || e.ID_ELEVE || e.ID || '').trim();
-      if (id) uniqueIds.add(id);
-    });
-
-    if (uniqueIds.size !== eleves.length) {
-      logLine('ERROR', '❌ ' + sheetName + ' : Doublons détectés ! ' + uniqueIds.size + ' IDs uniques pour ' + eleves.length + ' élèves');
-    }
-  }
-}
-
-/**
- * Purge le contenu des feuilles CACHE (garde les entêtes)
- */
-function clearSheets_(ctx) {
-  for (const sheetName of ctx.cacheSheets) {
-    const sheet = ctx.ss.getSheetByName(sheetName);
-    if (!sheet) continue;
-
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
-    }
-  }
-}
-
-/**
- * Écrit une liste d'élèves dans une feuille
- */
-function writeElevesToSheet_(ss, sheetName, eleves) {
-  const sheet = getOrCreateSheetByExactName_(ss, sheetName);
-  sheet.clearContents();
-
-  if (eleves.length === 0) {
-    ss.setActiveSheet(sheet);
-    SpreadsheetApp.flush();
-    return;
-  }
-
-  // Récupérer les headers du premier élève
-  const headers = Object.keys(eleves[0]);
-
-  // Écrire les headers (ligne 1)
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  // Écrire les données
-  const rows = eleves.map(e => headers.map(h => e[h] || ''));
-  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-
-  ss.setActiveSheet(sheet);
-  SpreadsheetApp.flush();
-}
-
-// getOrCreateSheetByExactName_ → déplacée dans App.SheetsData.js
-
-/**
- * Écriture directe dans une feuille CACHE avec activation/flush
- */
-function writeToCache_(ctx, baseClass, values) {
-  const name = baseClass + 'CACHE';
-  const sheet = getOrCreateSheetByExactName_(ctx.ss, name);
-  sheet.clearContents();
-  if (values && values.length) {
-    sheet.getRange(1, 1, values.length, values[0].length).setValues(values);
-  }
-  ctx.ss.setActiveSheet(sheet);
-  SpreadsheetApp.flush();
-}
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.SheetsData.js :
+//  - readElevesFromSheet_()
+//  - writeAllClassesToCACHE_()
+//  - clearSheets_()
+//  - writeElevesToSheet_()
+//  - writeToCache_()
+// ===================================================================
 
 // ===================================================================
 // 5. PHASE 1I : AFFECTATION OPTIONS & LV2
@@ -1393,198 +809,14 @@ function assignLV2ToClass_(eleves, lv2Code, targetCount, niveau) {
   return assigned;
 }
 
-/**
- * Verrouille certains attributs pour éviter qu'ils soient modifiés
- */
-function lockAttributes_(classesState, locks) {
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    for (const eleve of eleves) {
-      if (!eleve._locks) {
-        eleve._locks = {};
-      }
-
-      if (locks.options) {
-        eleve._locks.ITA = true;
-        eleve._locks.CHAV = true;
-      }
-      if (locks.lv2) {
-        eleve._locks.LV2 = true;
-      }
-      if (locks.disso) {
-        eleve._locks.DISSO = true;
-      }
-      if (locks.asso) {
-        eleve._locks.ASSO = true;
-      }
-      if (locks.parity) {
-        eleve._locks.PARITY = true;
-      }
-    }
-  }
-}
-
-/**
- * Applique les codes DISSO
- * Sépare les élèves avec même code D dans des classes différentes
- */
-function applyDisso_(classesState, ctx) {
-  let movedCount = 0;
-
-  // Collecter tous les codes DISSO
-  const dissoGroups = {};
-
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    for (const eleve of eleves) {
-      const codeD = eleve.DISSO || eleve['Code D'] || '';
-      if (codeD && codeD !== '') {
-        if (!dissoGroups[codeD]) {
-          dissoGroups[codeD] = [];
-        }
-        dissoGroups[codeD].push({ eleve: eleve, classe: niveau });
-      }
-    }
-  }
-
-  // Pour chaque code DISSO, vérifier si plusieurs élèves sont dans la même classe
-  for (const [codeD, membres] of Object.entries(dissoGroups)) {
-    if (membres.length < 2) continue;
-
-    // Regrouper par classe
-    const parClasse = {};
-    for (const m of membres) {
-      if (!parClasse[m.classe]) {
-        parClasse[m.classe] = [];
-      }
-      parClasse[m.classe].push(m.eleve);
-    }
-
-    // Si une classe contient plusieurs élèves avec ce code D, déplacer
-    for (const [classe, elevesEnDouble] of Object.entries(parClasse)) {
-      if (elevesEnDouble.length > 1) {
-        // Déplacer tous sauf le premier
-        for (let i = 1; i < elevesEnDouble.length; i++) {
-          const eleveADeplacer = elevesEnDouble[i];
-
-          // Trouver une classe cible qui n'a pas ce code D
-          const classeTarget = findClasseWithoutCode_(classesState, codeD, classe);
-
-          if (classeTarget) {
-            // Déplacer l'élève
-            moveEleveToClass_(classesState, eleveADeplacer, classe, classeTarget);
-            movedCount = movedCount + 1;
-            logLine('INFO', '  DISSO : Déplacé élève code D=' + codeD + ' de ' + classe + ' vers ' + classeTarget);
-          }
-        }
-      }
-    }
-  }
-
-  return movedCount;
-}
-
-/**
- * Applique les codes ASSO
- * Regroupe les élèves avec même code A dans la même classe
- */
-function applyAsso_(classesState, ctx) {
-  let movedCount = 0;
-
-  // Collecter tous les codes ASSO
-  const assoGroups = {};
-
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    for (const eleve of eleves) {
-      const codeA = eleve.ASSO || eleve['Code A'] || '';
-      if (codeA && codeA !== '') {
-        if (!assoGroups[codeA]) {
-          assoGroups[codeA] = [];
-        }
-        assoGroups[codeA].push({ eleve: eleve, classe: niveau });
-      }
-    }
-  }
-
-  // Pour chaque code ASSO, regrouper dans une seule classe
-  for (const [codeA, membres] of Object.entries(assoGroups)) {
-    if (membres.length < 2) continue;
-
-    // Déterminer la classe cible (celle qui a le plus d'élèves avec ce code)
-    const comptesParClasse = {};
-    for (const m of membres) {
-      if (!comptesParClasse[m.classe]) {
-        comptesParClasse[m.classe] = 0;
-      }
-      comptesParClasse[m.classe] = comptesParClasse[m.classe] + 1;
-    }
-
-    // Trouver la classe avec le max
-    let classeTarget = '';
-    let maxCount = 0;
-    for (const [classe, count] of Object.entries(comptesParClasse)) {
-      if (count > maxCount) {
-        maxCount = count;
-        classeTarget = classe;
-      }
-    }
-
-    // Déplacer tous les autres vers cette classe cible
-    for (const m of membres) {
-      if (m.classe !== classeTarget) {
-        moveEleveToClass_(classesState, m.eleve, m.classe, classeTarget);
-        movedCount = movedCount + 1;
-        logLine('INFO', '  ASSO : Déplacé élève code A=' + codeA + ' de ' + m.classe + ' vers ' + classeTarget);
-      }
-    }
-  }
-
-  return movedCount;
-}
-
-/**
- * Trouve une classe qui ne contient pas un code DISSO donné
- */
-function findClasseWithoutCode_(classesState, codeD, excludeClasse) {
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    if (niveau === excludeClasse) continue;
-
-    // Vérifier si cette classe a déjà ce code D
-    const hasCode = eleves.some(function(e) {
-      const code = e.DISSO || e['Code D'] || '';
-      return code === codeD;
-    });
-
-    if (!hasCode) {
-      return niveau;
-    }
-  }
-
-  // Si aucune classe sans le code, retourner la première classe différente
-  for (const niveau of Object.keys(classesState)) {
-    if (niveau !== excludeClasse) {
-      return niveau;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Déplace un élève d'une classe vers une autre
- */
-function moveEleveToClass_(classesState, eleve, fromClasse, toClasse) {
-  // Retirer de la classe source
-  const fromArray = classesState[fromClasse];
-  const index = fromArray.indexOf(eleve);
-  if (index > -1) {
-    fromArray.splice(index, 1);
-  }
-
-  // Ajouter à la classe cible
-  classesState[toClasse].push(eleve);
-
-  // Mettre à jour le champ Classe de l'élève
-  eleve.Classe = toClasse;
-}
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans Phase2I_DissoAsso.js :
+//  - lockAttributes_()
+//  - applyDisso_()
+//  - applyAsso_()
+//  - findClasseWithoutCode_()
+//  - moveEleveToClass_()
+// ===================================================================
 
 // ===================================================================
 // 7. PHASE 3I : EFFECTIFS & PARITÉ
@@ -1878,30 +1110,7 @@ function enforceParity_(classesState, tolerance, warnings) {
   }
 }
 
-/**
- * Trouve un élève d'un genre donné dans une liste
- */
-function findEleveByGenre_(eleves, genre) {
-  // ✅ CORRECTION : Ne PAS sélectionner un élève avec code ASSO ou DISSO
-  for (const eleve of eleves) {
-    const g = eleve.Genre || eleve.Sexe || '';
-    const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
-    const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
-
-    // Ignorer les élèves avec code ASSO ou DISSO
-    if ((codeA && codeA !== '') || (codeD && codeD !== '')) {
-      continue;
-    }
-
-    if (genre === 'F' && (g === 'F' || g === 'Fille')) {
-      return eleve;
-    }
-    if (genre === 'M' && (g === 'M' || g === 'Garçon' || g === 'G')) {
-      return eleve;
-    }
-  }
-  return null;
-}
+// findEleveByGenre_() → supprimée (définition canonique dans App.Core.js)
 
 /**
  * Échange deux élèves entre deux classes
@@ -1989,23 +1198,7 @@ function buildOffersFromStructure_(ctx) {
   return offers;
 }
 
-/**
- * Vérifie qu'un élève reste compatible avec l'offre de la classe cible
- */
-function isPlacementLV2OPTOK_(eleve, targetClass, offers) {
-  const cls = String(targetClass || '').replace(/CACHE|TEST|FIN$/,'');
-  const off = offers[cls];
-  if (!off) return true; // si pas d'info structure, ne pas bloquer
-  
-  const lv2 = String(eleve.lv2 || eleve.LV2 || '').toUpperCase().trim();
-  const opt = String(eleve.opt || eleve.OPT || '').toUpperCase().trim();
-  
-  // LV2/OPT vides => pas de contrainte
-  const lv2OK = !lv2 || off.LV2.has(lv2);
-  const optOK = !opt || off.OPT.has(opt);
-  
-  return lv2OK && optOK;
-}
+// isPlacementLV2OPTOK_() → supprimée (définition canonique dans App.Core.js)
 
 /**
  * Phase 4 : Optimisation par swaps (COM prioritaire)
@@ -2159,36 +1352,8 @@ function runSwapEngineV14_withLocks_LEGACY_(classesState, options, locks, warnin
   };
 }
 
-/**
- * Calcule les scores de toutes les classes pour toutes les métriques
- */
-function calculateClassScores_LEGACY_(classesState, metrics) {
-  const scores = {};
-
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    scores[niveau] = {};
-
-    for (const metric of metrics) {
-      scores[niveau][metric] = calculateClassMetric_LEGACY_(eleves, metric);
-    }
-  }
-
-  return scores;
-}
-
-/**
- * Calcule une métrique pour une classe
- */
-function calculateClassMetric_LEGACY_(eleves, metric) {
-  let sum = 0;
-
-  for (const eleve of eleves) {
-    const value = parseFloat(eleve[metric]) || 0;
-    sum = sum + value;
-  }
-
-  return eleves.length > 0 ? sum / eleves.length : 0;
-}
+// calculateClassScores_LEGACY_() → supprimée (définition canonique dans App.Core.js)
+// calculateClassMetric_LEGACY_() → supprimée (définition canonique dans App.Core.js)
 
 /**
  * Trouve le meilleur swap possible avec objectifs hiérarchisés et pondérés
@@ -2267,181 +1432,15 @@ function findBestSwap_LEGACY_(classesState, currentScores, primary, locks, offer
   return bestSwap;
 }
 
-/**
- * Calcule les compteurs LV2/OPT actuels depuis l'état des classes
- * @param {Object} classesState - État actuel {classe: [eleves]}
- * @returns {Object} Compteurs {classe: {LV2:{ITA:n}, OPT:{CHAV:m}, total:n}}
- */
-function computeCountsFromState_(classesState) {
-  const counts = {};
-  
-  Object.keys(classesState).forEach(function(cls) {
-    const eleves = classesState[cls] || [];
-    const LV2 = {};
-    const OPT = {};
-    
-    eleves.forEach(function(e) {
-      const lv2 = String(e.LV2 || e.lv2 || '').trim().toUpperCase();
-      const opt = String(e.OPT || e.opt || '').trim().toUpperCase();
-      
-      if (lv2 && lv2 !== 'ANG') {
-        LV2[lv2] = (LV2[lv2] || 0) + 1;
-      }
-      if (opt) {
-        OPT[opt] = (OPT[opt] || 0) + 1;
-      }
-    });
-    
-    counts[cls] = {
-      LV2: LV2,
-      OPT: OPT,
-      total: eleves.length
-    };
-  });
-  
-  return counts;
-}
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Core.js :
+//  - computeCountsFromState_()
+//  - isMoveAllowed_()
+//  - eligibleForSwap_LEGACY_()
+//  - isSwapValid_LEGACY_()
+// ===================================================================
 
-/**
- * ✅ GARDE-FOU UNIVERSEL : Vérifie si un mouvement d'élève est autorisé
- * Utilisé par Phase 3I (parité), Phase 4 (swaps) et repairQuotas
- * 
- * @param {Object} eleve - L'élève à déplacer
- * @param {string} clsTo - La classe de destination
- * @param {Object} offer - L'offre LV2/OPT par classe (depuis buildOfferWithQuotas_)
- * @param {Object} counts - Compteurs actuels par classe {cls: {LV2:{ITA:n}, OPT:{CHAV:m}}}
- * @param {Object} quotas - Quotas attendus (optionnel, déjà dans offer.quotas)
- * @returns {boolean} true si le mouvement est autorisé
- */
-function isMoveAllowed_(eleve, clsTo, offer, counts, quotas) {
-  // 0) Élève FIXE => jamais bouge
-  const fixe = String(eleve.FIXE || eleve.fixe || '').trim().toUpperCase();
-  if (fixe === '1' || fixe === 'OUI' || fixe === 'X' || fixe === 'FIXE') {
-    return false;
-  }
-
-  // 1) Offre LV2/OPT de la classe cible
-  const off = offer[clsTo] || { LV2: [], OPT: [], quotas: {} };
-  
-  const lv2 = String(eleve.LV2 || eleve.lv2 || '').trim().toUpperCase();
-  const opt = String(eleve.OPT || eleve.opt || '').trim().toUpperCase();
-  
-  // Vérifier que la LV2 est autorisée (sauf ANG qui est partout)
-  if (lv2 && lv2 !== 'ANG' && off.LV2.length > 0 && off.LV2.indexOf(lv2) === -1) {
-    return false;
-  }
-  
-  // Vérifier que l'OPT est autorisée
-  if (opt && off.OPT.length > 0 && off.OPT.indexOf(opt) === -1) {
-    return false;
-  }
-
-  // 2) Respect des quotas (si définis)
-  const q = off.quotas || {};
-  const clsCounts = counts[clsTo] || { LV2: {}, OPT: {} };
-  
-  // Compte réalisé actuel dans la classe cible
-  const realizedLV2 = lv2 ? (clsCounts.LV2[lv2] || 0) : 0;
-  const realizedOPT = opt ? (clsCounts.OPT[opt] || 0) : 0;
-  
-  // Cible attendue
-  const targetLV2 = lv2 ? (q[lv2] || 0) : 0;
-  const targetOPT = opt ? (q[opt] || 0) : 0;
-  
-  // Si quota existe (>0), ne pas dépasser
-  if (lv2 && targetLV2 > 0 && realizedLV2 >= targetLV2) {
-    return false;
-  }
-  if (opt && targetOPT > 0 && realizedOPT >= targetOPT) {
-    return false;
-  }
-
-  // 3) Mobilité : PERMUT ou LIBRE uniquement
-  const mobi = String(eleve.MOBILITE || eleve.mobilite || '').trim().toUpperCase();
-  if (mobi && mobi.indexOf('PERMUT') === -1 && mobi !== 'LIBRE') {
-    // Si ce n'est ni PERMUT ni LIBRE, on refuse (sauf si vide = on accepte)
-    if (mobi !== '') return false;
-  }
-
-  // 4) Codes A : si un membre du groupe A est marqué FIXE ailleurs → refuser éclatement
-  // (optionnel) à compléter par logique de "swap de groupe A" quand nécessaire
-
-  return true;
-}
-
-/**
- * @deprecated Utiliser isMoveAllowed_ à la place
- * Conservé pour compatibilité avec le code existant
- */
-function eligibleForSwap_LEGACY_(eleve, clsCible, offer) {
-  // Appeler la nouvelle fonction avec counts vides (pas de vérification quotas)
-  return isMoveAllowed_(eleve, clsCible, offer, {}, {});
-}
-
-/**
- * Vérifie si un swap est valide selon les verrous
- */
-function isSwapValid_LEGACY_(eleve1, classe1, eleve2, classe2, locks, classesState, offer, counts) {
-  // ✅ Utiliser isMoveAllowed_ avec vérification des quotas
-  if (!isMoveAllowed_(eleve1, classe2, offer, counts || {}, {})) {
-    return false;
-  }
-  if (!isMoveAllowed_(eleve2, classe1, offer, counts || {}, {})) {
-    return false;
-  }
-
-  // Vérifications supplémentaires selon les verrous
-  if (locks.keepDisso) {
-    // Vérifier que les codes D ne créent pas de conflit
-    const d1 = String(eleve1.DISSO || eleve1.D || '').trim().toUpperCase();
-    const d2 = String(eleve2.DISSO || eleve2.D || '').trim().toUpperCase();
-    
-    if (d1) {
-      // Vérifier qu'aucun élève de classe2 n'a le même code D
-      const eleves2 = classesState[classe2] || [];
-      for (const e of eleves2) {
-        const d = String(e.DISSO || e.D || '').trim().toUpperCase();
-        if (d === d1 && e !== eleve2) return false;
-      }
-    }
-    
-    if (d2) {
-      // Vérifier qu'aucun élève de classe1 n'a le même code D
-      const eleves1 = classesState[classe1] || [];
-      for (const e of eleves1) {
-        const d = String(e.DISSO || e.D || '').trim().toUpperCase();
-        if (d === d2 && e !== eleve1) return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-/**
- * Calcule les statistiques de mobilité (LIBRE vs FIXE)
- */
-function computeMobilityStats_LEGACY_(classesState, offer) {
-  let libre = 0;
-  let fixe = 0;
-  
-  for (const [classe, eleves] of Object.entries(classesState)) {
-    const counts = computeCountsFromState_(classesState);
-    eleves.forEach(function(e) {
-      if (isEleveMobile_LEGACY_(e, counts, classe, offer)) {
-        libre++;
-      } else {
-        fixe++;
-      }
-    });
-  }
-  
-  return {
-    libre: libre,
-    fixe: fixe,
-    total: libre + fixe
-  };
-}
+// computeMobilityStats_LEGACY_() → supprimée (définition canonique dans App.Core.js)
 
 /**
  * Garde-fou final parité : si une classe reste hors tolérance,
@@ -2521,273 +1520,26 @@ function applyParityGuardrail_LEGACY_(classesState, parityTol, offer, counts) {
   });
 }
 
-/**
- * Vérifie si un élève est mobile (LIBRE ou PERMUT, hors quotas)
- */
-function isEleveMobile_LEGACY_(eleve, counts, currentClass, offer) {
-  // 1) Élève FIXE => jamais mobile
-  const fixe = String(eleve.FIXE || eleve.fixe || '').trim().toUpperCase();
-  if (fixe === '1' || fixe === 'OUI' || fixe === 'X' || fixe === 'FIXE') {
-    return false;
-  }
-  
-  // 2) Élève quota (ITA/CHAV) => FIXE pour préserver les quotas
-  const lv2 = String(eleve.LV2 || eleve.lv2 || '').trim().toUpperCase();
-  const opt = String(eleve.OPT || eleve.opt || '').trim().toUpperCase();
-  
-  // Si l'élève a une LV2 ou OPT avec quota dans sa classe actuelle, il est FIXE
-  const classOffer = offer[currentClass] || { quotas: {} };
-  const quotas = classOffer.quotas || {};
-  
-  if ((lv2 && quotas[lv2] > 0) || (opt && quotas[opt] > 0)) {
-    return false; // Élève quota => FIXE
-  }
-  
-  // 3) Codes ASSO => FIXE (ne pas casser les groupes)
-  const codeA = String(eleve.ASSO || eleve.A || eleve.CODE_A || '').trim().toUpperCase();
-  if (codeA) {
-    return false; // Groupe ASSO => FIXE
-  }
-  
-  // 4) Sinon => LIBRE (mobile)
-  return true;
-}
-
-/**
- * Calcule le score d'amélioration d'un swap (hiérarchisé + pondéré)
- * Priorité 1 : Parité (si hors tolérance)
- * Priorité 2 : Scores pondérés (COM/TRA/PART/ABS)
- */
-function calculateSwapScore_LEGACY_(eleve1, classe1, eleve2, classe2, classesState, weights, parityTol) {
-  // Calculer l'état actuel des classes
-  const state1 = computeClassState_LEGACY_(classesState[classe1]);
-  const state2 = computeClassState_LEGACY_(classesState[classe2]);
-  
-  // Simuler le swap
-  const state1After = simulateSwapState_LEGACY_(state1, eleve1, eleve2);
-  const state2After = simulateSwapState_LEGACY_(state2, eleve2, eleve1);
-  
-  // === NIVEAU 1 : PARITÉ (prioritaire si hors tolérance) ===
-  const parityBefore = Math.abs(state1.deltaFM) + Math.abs(state2.deltaFM);
-  const parityAfter = Math.abs(state1After.deltaFM) + Math.abs(state2After.deltaFM);
-  const parityImprovement = parityBefore - parityAfter;
-  
-  // Si une classe est hors tolérance, prioriser la parité
-  const parityOutOfTol = (Math.abs(state1.deltaFM) > parityTol) || (Math.abs(state2.deltaFM) > parityTol);
-  
-  if (parityOutOfTol && parityImprovement > 0) {
-    // Bonus massif pour améliorer la parité hors tolérance
-    return 1000 * parityImprovement;
-  }
-  
-  // === NIVEAU 2 : SCORES PONDÉRÉS (COM/TRA/PART/ABS) ===
-  
-  // Dispersion COM=1 (équilibrer les mauvais COM entre classes)
-  // Calcul de la dispersion globale : somme des écarts à la moyenne
-  const allClasses = Object.keys(classesState);
-  const totalBadCOMBefore = allClasses.reduce(function(sum, cls) {
-    return sum + computeClassState_LEGACY_(classesState[cls]).badCOM;
-  }, 0);
-  const meanBadCOM = totalBadCOMBefore / allClasses.length;
-  
-  const dispersionBefore = Math.abs(state1.badCOM - meanBadCOM) + Math.abs(state2.badCOM - meanBadCOM);
-  const dispersionAfter = Math.abs(state1After.badCOM - meanBadCOM) + Math.abs(state2After.badCOM - meanBadCOM);
-  const improvementDispersion = dispersionBefore - dispersionAfter;
-  
-  // Coût individuel pondéré
-  const costBefore = 
-    weights.com * (state1.sumCOM + state2.sumCOM) +
-    weights.tra * (state1.sumTRA + state2.sumTRA) +
-    weights.part * (state1.sumPART + state2.sumPART) +
-    weights.abs * (state1.sumABS + state2.sumABS);
-    
-  const costAfter = 
-    weights.com * (state1After.sumCOM + state2After.sumCOM) +
-    weights.tra * (state1After.sumTRA + state2After.sumTRA) +
-    weights.part * (state1After.sumPART + state2After.sumPART) +
-    weights.abs * (state1After.sumABS + state2After.sumABS);
-    
-  const improvementCost = costBefore - costAfter;
-  
-  // Score final pondéré
-  // Priorité : dispersion COM=1 (×20) > coût individuel > parité faible
-  return 20 * improvementDispersion + improvementCost + 0.1 * parityImprovement;
-}
-
-/**
- * Calcule l'état d'une classe (compteurs pour les scores)
- */
-function computeClassState_LEGACY_(eleves) {
-  let countF = 0, countM = 0;
-  let badCOM = 0, sumCOM = 0;
-  let sumTRA = 0, sumPART = 0, sumABS = 0;
-  
-  eleves.forEach(function(e) {
-    // Genre
-    const genre = String(e.SEXE || e.Genre || e.Sexe || '').toUpperCase();
-    if (genre === 'F') countF++;
-    else if (genre === 'M') countM++;
-    
-    // Scores
-    const com = parseFloat(e.COM || 0);
-    const tra = parseFloat(e.TRA || 0);
-    const part = parseFloat(e.PART || 0);
-    const abs = parseFloat(e.ABS || 0);
-    
-    if (com === 1) badCOM++;
-    sumCOM += com;
-    sumTRA += tra;
-    sumPART += part;
-    sumABS += abs;
-  });
-  
-  return {
-    size: eleves.length,
-    countF: countF,
-    countM: countM,
-    deltaFM: countF - countM,
-    badCOM: badCOM,
-    sumCOM: sumCOM,
-    sumTRA: sumTRA,
-    sumPART: sumPART,
-    sumABS: sumABS
-  };
-}
-
-/**
- * Simule l'état d'une classe après un swap (enlève out, ajoute in)
- */
-function simulateSwapState_LEGACY_(state, out, in_) {
-  const newState = JSON.parse(JSON.stringify(state)); // Clone
-  
-  // Retirer out
-  const genreOut = String(out.SEXE || out.Genre || out.Sexe || '').toUpperCase();
-  if (genreOut === 'F') newState.countF--;
-  else if (genreOut === 'M') newState.countM--;
-  
-  const comOut = parseFloat(out.COM || 0);
-  if (comOut === 1) newState.badCOM--;
-  newState.sumCOM -= comOut;
-  newState.sumTRA -= parseFloat(out.TRA || 0);
-  newState.sumPART -= parseFloat(out.PART || 0);
-  newState.sumABS -= parseFloat(out.ABS || 0);
-  
-  // Ajouter in
-  const genreIn = String(in_.SEXE || in_.Genre || in_.Sexe || '').toUpperCase();
-  if (genreIn === 'F') newState.countF++;
-  else if (genreIn === 'M') newState.countM++;
-  
-  const comIn = parseFloat(in_.COM || 0);
-  if (comIn === 1) newState.badCOM++;
-  newState.sumCOM += comIn;
-  newState.sumTRA += parseFloat(in_.TRA || 0);
-  newState.sumPART += parseFloat(in_.PART || 0);
-  newState.sumABS += parseFloat(in_.ABS || 0);
-  
-  newState.deltaFM = newState.countF - newState.countM;
-  
-  return newState;
-}
-
 // ===================================================================
-// 9. UTILITAIRES LOGGING
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Core.js :
+//  - isEleveMobile_LEGACY_()
+//  - calculateSwapScore_LEGACY_()
+//  - computeClassState_LEGACY_()
+//  - simulateSwapState_LEGACY_()
 // ===================================================================
 
-/**
- * Log simple avec timestamp
- */
-function logLine(level, msg) {
-  const stamp = new Date().toLocaleString('fr-FR');
-  const prefix = stamp + ' ' + level.padEnd(7);
-  Logger.log(prefix + ' ' + msg);
-}
-
 // ===================================================================
-// UTILITAIRES MOBILITÉ
+// 9. UTILITAIRES — logLine, _u_, _arr → supprimés (App.Core.js)
 // ===================================================================
 
-/** Utilities */
-function _u_(v) { return String(v || '').trim().toUpperCase(); }
-function _arr(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]); }
+// ensureColumn_() → supprimée (définition canonique dans App.SheetsData.js)
 
-/**
- * Retourne l'index (ou crée la colonne si absente)
- */
-function ensureColumn_(sheet, headerName) {
-  const rng = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1);
-  const headers = rng.getValues()[0];
-  let idx = headers.indexOf(headerName);
-  if (idx === -1) {
-    idx = headers.length;
-    sheet.getRange(1, idx + 1).setValue(headerName);
-    SpreadsheetApp.flush();
-  }
-  return idx; // 0-based
-}
-
-/**
- * Construit la table des classes offrant LV2/OPT depuis ctx.quotas
- */
-function buildClassOffers_(ctx) {
-  const offers = {}; // classe -> {LV2:Set, OPT:Set}
-
-  (ctx.cacheSheets || []).forEach(function(cl) {
-    const base = cl.replace(/CACHE$/, '');
-    offers[base] = { LV2: new Set(), OPT: new Set() };
-  });
-
-  // ctx.quotas vient de _STRUCTURE
-  Object.keys(ctx.quotas || {}).forEach(function(classe) {
-    const base = classe; // "6°1"
-    if (!offers[base]) offers[base] = { LV2: new Set(), OPT: new Set() };
-    const q = ctx.quotas[classe] || {};
-
-    Object.keys(q).forEach(function(label) {
-      const L = _u_(label);
-      // Heuristique: LV2 connus
-      if (/(ITA|ALL|ESP|PT|CHI|ANG|GER|LAT2?|ALLEMAND|ESPAGNOL|ITALIEN|CHINOIS|PORTUGAIS)/.test(L)) {
-        offers[base].LV2.add(L);
-      } else {
-        offers[base].OPT.add(L);
-      }
-    });
-  });
-
-  return offers;
-}
-
-/**
- * Retourne Allow(eleve) = classes (sans suffixe) autorisées par LV2 & OPT
- */
-function computeAllow_(eleve, classOffers) {
-  const lv2 = _u_(eleve.LV2 || eleve.lv2);
-  const opt = _u_(eleve.OPT || eleve.opt);
-  const allClasses = Object.keys(classOffers);
-  let allowed = allClasses.slice();
-
-  if (lv2) {
-    allowed = allowed.filter(function(cl) { return classOffers[cl].LV2.has(lv2); });
-  }
-  if (opt) {
-    allowed = allowed.filter(function(cl) { return classOffers[cl].OPT.has(opt); });
-  }
-
-  return allowed;
-}
-
-/**
- * Parse codes A/D (depuis colonnes dédiées A/D, ou depuis une colonne CODES)
- */
-function parseCodes_(rowObj) {
-  let A = _u_(rowObj.A || rowObj.codeA || '');
-  let D = _u_(rowObj.D || rowObj.codeD || '');
-  const C = _u_(rowObj.CODES || '');
-
-  if (!A && /A\d+/.test(C)) A = (C.match(/A\d+/) || [])[0];
-  if (!D && /D\d+/.test(C)) D = (C.match(/D\d+/) || [])[0];
-
-  return { A: A, D: D };
-}
+// ===================================================================
+// FONCTIONS SUPPRIMÉES — définitions canoniques dans App.Core.js / App.Context.js :
+//  - buildClassOffers_() → App.Context.js
+//  - computeAllow_()     → App.Context.js
+//  - parseCodes_()       → App.Core.js
+// ===================================================================
 
 /**
  * Calcul & écriture des colonnes FIXE/MOBILITE dans tous les ...CACHE
@@ -3004,100 +1756,13 @@ function computeMobilityFlags_(ctx) {
   logLine('INFO', '✅ Mobilité calculée: FIXE=' + countFIXE + ', PERMUT=' + countPERMUT + ', LIBRE=' + countLIBRE + ', CONFLIT=' + countCONFLIT);
 }
 
-/**
- * Ouvre visuellement les onglets CACHE et force la synchronisation
- */
-function openCacheTabs_(ctx) {
-  try {
-    // ✅ Flush AVANT pour garantir que les écritures précédentes sont bien propagées
-    SpreadsheetApp.flush();
-    Utilities.sleep(200); // Attendre propagation Drive/Sheets
-
-    const opened = [];
-    const stats = [];
-
-    // Activer chaque onglet CACHE et récupérer ses stats
-    for (let i = 0; i < ctx.cacheSheets.length; i++) {
-      const name = ctx.cacheSheets[i];
-      const sh = ctx.ss.getSheetByName(name);
-
-      if (sh) {
-        // Activer l'onglet pour forcer sa visibilité
-        ctx.ss.setActiveSheet(sh);
-        sh.getRange('A1').activate(); // Ancrer la sélection
-        opened.push(name);
-
-        // Récupérer les stats
-        const rows = sh.getLastRow();
-        const cols = sh.getLastColumn();
-        stats.push({ sheet: name, rows: rows, cols: cols });
-
-        logLine('INFO', '  ✅ Activé: ' + name + ' (' + rows + ' lignes, ' + cols + ' colonnes)');
-        Utilities.sleep(80); // Petit délai entre chaque activation
-      } else {
-        logLine('ERROR', '  ❌ Onglet ' + name + ' introuvable !');
-      }
-    }
-
-    // Flush APRÈS pour garantir que les activations sont propagées
-    SpreadsheetApp.flush();
-
-    const active = ctx.ss.getActiveSheet() ? ctx.ss.getActiveSheet().getName() : '(aucun)';
-    logLine('INFO', '✅ Onglet actif final: ' + active);
-    logLine('INFO', '✅ ' + opened.length + ' onglets CACHE activés: ' + opened.join(', '));
-
-    return {
-      opened: opened,
-      active: active,
-      stats: stats
-    };
-  } catch (e) {
-    logLine('WARN', '⚠️ openCacheTabs_ a échoué: ' + e.message);
-    return {
-      opened: [],
-      active: null,
-      stats: [],
-      error: e.message
-    };
-  }
-}
+// openCacheTabs_() → supprimée (définition canonique dans App.CacheManager.js)
 
 // ===================================================================
 // 9B. AUDIT CACHE CONTRE STRUCTURE
 // ===================================================================
 
-/**
- * Construit l'offre avec quotas détaillés depuis ctx.quotas
- * Retourne { cls: { LV2:[], OPT:[], quotas: {ITA:6, CHAV:10, ...} } }
- */
-function buildOfferWithQuotas_(ctx) {
-  const res = {}; // { cls: { LV2:[], OPT:[], quotas: {ITA:6, CHAV:10, ...} } }
-  
-  // Initialiser depuis cacheSheets
-  (ctx.cacheSheets || []).forEach(function(name) {
-    const cls = name.replace(/CACHE$/, '').trim();
-    res[cls] = { LV2: [], OPT: [], quotas: {} };
-  });
-  
-  // Remplir depuis ctx.quotas
-  Object.keys(ctx.quotas || {}).forEach(function(cls) {
-    res[cls] = res[cls] || { LV2: [], OPT: [], quotas: {} };
-    Object.keys(ctx.quotas[cls]).forEach(function(k) {
-      const K = k.toUpperCase();
-      const q = Number(ctx.quotas[cls][k]) || 0;
-      res[cls].quotas[K] = q;
-      
-      // Classifier en LV2 ou OPT
-      if (K === 'CHAV' || K === 'LAT' || K === 'GRE' || K === 'OPT' || K === 'ITA_OPT') {
-        res[cls].OPT.push(K === 'ITA_OPT' ? 'ITA' : K);
-      } else {
-        res[cls].LV2.push(K);
-      }
-    });
-  });
-  
-  return res;
-}
+// buildOfferWithQuotas_() → supprimée (définition canonique dans App.Context.js)
 
 /**
  * Audite les onglets CACHE contre la structure attendue

@@ -411,32 +411,8 @@ try {
 // COMPATIBILITÉ LEGACY
 // ===================================================================
 
-/**
- * Fonction legacy pour compatibilité avec logLine()
- * @deprecated Utiliser Logger.info() à la place
- */
-function logLine(level, message) {
-  // Mapper les anciens niveaux vers le nouveau Logger
-  var levelMap = {
-    'TRACE': Logger.LEVELS.TRACE,
-    'DEBUG': Logger.LEVELS.DEBUG,
-    'INFO': Logger.LEVELS.INFO,
-    'WARN': Logger.LEVELS.WARN,
-    'ERROR': Logger.LEVELS.ERROR
-  };
-
-  var logLevel = levelMap[level] !== undefined ? levelMap[level] : Logger.LEVELS.INFO;
-
-  if (logLevel === Logger.LEVELS.ERROR) {
-    Logger.error(message);
-  } else if (logLevel === Logger.LEVELS.WARN) {
-    Logger.warn(message);
-  } else if (logLevel === Logger.LEVELS.DEBUG) {
-    Logger.debug(message);
-  } else {
-    Logger.info(message);
-  }
-}
+// logLine() → supprimée (définition canonique dans App.Core.js)
+// Pour le logging avancé, utiliser Logger.info() directement.
 
 // ===================================================================
 // EXPORTS

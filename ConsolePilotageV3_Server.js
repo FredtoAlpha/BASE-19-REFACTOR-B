@@ -79,41 +79,7 @@ function v3_loadConfigForForm() {
   }
 }
 
-/**
- * Sauvegarde uniquement la configuration dans _CONFIG sans toucher aux onglets
- */
-function v3_saveConfigOnly(form) {
-  try {
-    // 1. Mettre à jour les paramètres simples
-    updateConfig('ADMIN_PASSWORD', form.adminPassword);
-    updateConfig('NIVEAU', form.niveau);
-    updateConfig('NB_SOURCES', form.nbSources); // On stocke pour la prochaine fois
-    updateConfig('NB_DEST', form.nbDest);       // On stocke pour la prochaine fois
-
-    // 2. Mettre à jour les listes (LV2, OPT, DISPO)
-    // LV2
-    updateConfig('LV2_OPTIONS', form.lv2); // updateConfig gère les strings avec virgules
-
-    // OPT (Dépend du niveau)
-    const niveauKey = form.niveau.toLowerCase().replace('°', 'e');
-    // Pour OPT, c'est plus complexe car c'est une sous-clé de OPTIONS
-    // On va utiliser une clé spéciale "OPTIONS_5e" que getConfig sait lire
-    updateConfig(`OPTIONS_${niveauKey.toUpperCase()}`, form.opt);
-
-    // DISPO (Nouveau)
-    if (form.dispo) {
-      updateConfig('DISPOSITIFS', form.dispo); // updateConfig gère les strings avec virgules si implémenté
-      // Si updateConfig ne gère pas les arrays pour les nouvelles clés, il stockera le string, ce qui est OK
-    }
-
-    // Invalider le cache pour forcer le rechargement au prochain appel
-    CacheService.getScriptCache().remove("v3_config_form");
-
-    return { success: true, message: "Configuration sauvegardée !" };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
+// v3_saveConfigOnly() → supprimée (définition canonique dans SaveConfigOnly.js)
 
 /**
  * ===================================================================
