@@ -4,6 +4,20 @@
  * ===================================================================
  * Module responsable de la lecture et l'écriture des données élèves
  * Extrait du Code.gs originel (Lignes 114-339)
+ *
+ * Version: 1.1.0 — SAFE: suppression des 5 fonctions en collision avec Code.js
+ *
+ * Fonctions supprimées (définitions canoniques dans Code.js) :
+ *  - getClassesData()           → Code.js (version avec SHEET_PATTERNS + per-sheet try/catch)
+ *  - getLastCacheInfo()         → Code.js (lecture PropertiesService)
+ *  - getBridgeContextAndClear() → Code.js (safeGetUserProperty)
+ *  - saveCacheData()            → Code.js (PropertiesService)
+ *  - loadCacheData()            → Code.js (cohérent avec saveCacheData)
+ *
+ * Fonctions conservées (uniques à ce fichier) :
+ *  - loadAllStudentsData(), validateScore(), saveStudentsToSheet()
+ *  - calculateGlobalStudentStats(), cloneStudent(), validateClassData()
+ *  - saveElevesSnapshot(), saveDispositionToSheets()
  * ===================================================================
  */
 
@@ -103,36 +117,10 @@ function validateScore(score) {
   return Math.max(0, Math.min(5, num));
 }
 
-/**
- * Récupère les données groupées par classe
- * @param {string} mode - 'source' ou 'fin' pour indiquer le type d'onglet
- * @returns {Object} Données organisées par classe
- */
-function getClassesData(mode = 'source') {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const classesData = {};
-
-  const filter = mode === 'fin' ? /FIN$/ : /.+°\d+$/; // ✅ Pattern universel
-  const sheets = ss.getSheets().filter(s => filter.test(s.getName()));
-
-  sheets.forEach(sheet => {
-    const data = sheet.getDataRange().getValues();
-    if (data.length < 2) return;
-
-    classesData[sheet.getName()] = {
-      sheetName: sheet.getName(),
-      headers: data[0],
-      students: data.slice(1).filter(row => row[0] && String(row[0]).trim() !== ''),
-      rowCount: data.length - 1,
-      timestamp: new Date().getTime()
-    };
-  });
-
-  return {
-    success: true,
-    data: classesData
-  };
-}
+// ===================================================================
+// getClassesData() → supprimée (définition canonique dans Code.js
+// avec SHEET_PATTERNS + per-sheet try/catch)
+// ===================================================================
 
 /**
  * Sauvegarde les données modifiées dans une classe
@@ -306,139 +294,24 @@ function saveElevesSnapshot(disposition, mode) {
   }
 }
 
-/**
- * Récupère les informations du dernier cache
- * @returns {Object} {exists: boolean, date: string, mode: string}
- */
-function getLastCacheInfo() {
-  try {
-    const props = PropertiesService.getUserProperties();
-    const cacheData = props.getProperty('INTERFACEV2_CACHE');
-    
-    if (!cacheData) {
-      return { success: true, exists: false };
-    }
-    
-    const cache = JSON.parse(cacheData);
-    return {
-      success: true,
-      exists: true,
-      date: cache.timestamp || new Date().toISOString(),
-      mode: cache.mode || 'unknown'
-    };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
+// ===================================================================
+// getLastCacheInfo() → supprimée (définition canonique dans Code.js
+// lecture PropertiesService)
+// ===================================================================
 
-/**
- * Sauvegarde les données dans le cache
- * @param {Object} cacheData - Données à sauvegarder
- * @returns {Object} {success: boolean}
- */
-function saveCacheData(cacheData) {
-  try {
-    const props = PropertiesService.getUserProperties();
-    props.setProperty('INTERFACEV2_CACHE', JSON.stringify(cacheData));
-    return { success: true };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
+// ===================================================================
+// saveCacheData() → supprimée (définition canonique dans Code.js
+// PropertiesService)
+// ===================================================================
 
-/**
- * Charge les données depuis le cache
- * @returns {Object} {success: boolean, data: Object}
- */
-function loadCacheData() {
-  try {
-    const props = PropertiesService.getUserProperties();
-    const cacheData = props.getProperty('INTERFACEV2_CACHE');
-    
-    if (!cacheData) {
-      return { success: true, data: null };
-    }
-    
-    return { success: true, data: JSON.parse(cacheData) };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
+// ===================================================================
+// loadCacheData() → supprimée (définition canonique dans Code.js
+// cohérent avec saveCacheData)
+// ===================================================================
 
-/**
- * Sauvegarde la disposition dans les onglets Google Sheets (création des onglets CACHE)
- * @param {Object} disposition - Objet {className: {headers: [], students: []}}
- * @returns {Object} {success: boolean, saved: number, timestamp: string}
- */
-function saveDispositionToSheets(disposition) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let savedCount = 0;
+// saveDispositionToSheets() → supprimée (définition canonique dans Code.js avec validation params + per-class try/catch)
 
-    for (const className in disposition) {
-      const classData = disposition[className];
-
-      // Nom de l'onglet CACHE (ex: "5°1 TEST" -> "5°1 CACHE")
-      const cacheSheetName = className.replace(/(TEST|FIN|PREVIOUS)$/i, 'CACHE');
-
-      // Créer ou obtenir l'onglet CACHE
-      let cacheSheet = ss.getSheetByName(cacheSheetName);
-      if (!cacheSheet) {
-        cacheSheet = ss.insertSheet(cacheSheetName);
-        Logger.log(`✅ Onglet créé: ${cacheSheetName}`);
-      } else {
-        cacheSheet.clearContents();
-        Logger.log(`🔄 Onglet vidé: ${cacheSheetName}`);
-      }
-
-      // Écrire les données
-      if (classData.headers && classData.students) {
-        const allRows = [classData.headers, ...classData.students];
-        if (allRows.length > 0 && classData.headers.length > 0) {
-          cacheSheet.getRange(1, 1, allRows.length, classData.headers.length)
-            .setValues(allRows);
-          savedCount++;
-        }
-      }
-    }
-
-    SpreadsheetApp.flush();
-
-    Logger.log(`💾 Sauvegarde réussie: ${savedCount} onglets CACHE créés/mis à jour`);
-
-    return {
-      success: true,
-      saved: savedCount,
-      timestamp: new Date().toISOString()
-    };
-
-  } catch (e) {
-    Logger.log(`❌ Erreur saveDispositionToSheets: ${e.toString()}`);
-    return {
-      success: false,
-      error: e.toString()
-    };
-  }
-}
-
-/**
- * Récupère et efface le contexte du pont depuis ConsolePilotage
- * @returns {Object} {success: boolean, context: Object}
- */
-function getBridgeContextAndClear() {
-  try {
-    const props = PropertiesService.getUserProperties();
-    const context = props.getProperty('JULES_CONTEXT');
-
-    if (!context) {
-      return { success: true, context: null };
-    }
-
-    // Effacer après lecture
-    props.deleteProperty('JULES_CONTEXT');
-
-    return { success: true, context: JSON.parse(context) };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
+// ===================================================================
+// getBridgeContextAndClear() → supprimée (définition canonique dans
+// Code.js avec safeGetUserProperty)
+// ===================================================================

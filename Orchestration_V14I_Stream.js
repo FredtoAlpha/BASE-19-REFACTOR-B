@@ -199,34 +199,7 @@ function focusFirstCacheTab_(ctx) {
   }
 }
 
-/**
- * Ouvre et active tous les onglets CACHE pour forcer l'affichage
- */
-function openCacheTabs_(ctx) {
-  SpreadsheetApp.flush();
-  Utilities.sleep(200);
-  
-  const opened = [];
-  
-  for (let i = 0; i < ctx.cacheSheets.length; i++) {
-    const name = ctx.cacheSheets[i];
-    const sh = ctx.ss.getSheetByName(name);
-    
-    if (sh) {
-      ctx.ss.setActiveSheet(sh);
-      sh.getRange('A1').activate();
-      opened.push(name);
-      Utilities.sleep(80);
-    }
-  }
-  
-  SpreadsheetApp.flush();
-  
-  const active = ctx.ss.getActiveSheet().getName();
-  logLine('INFO', '✅ Onglets CACHE ouverts: ' + opened.join(', ') + ' (actif: ' + active + ')');
-  
-  return { opened: opened, active: active };
-}
+// openCacheTabs_() → supprimée (définition canonique dans App.CacheManager.js)
 
 /**
  * Empaquette les infos de contexte pour le front

@@ -896,42 +896,8 @@ function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
   return Phase3I_completeAndParity_PariteAdaptive_V3(ctx);
 }
 
-function logParityDecision(cls, details) {
-  try {
-    function formatPenalty(value) {
-      if (value === undefined || value === null) return '';
-      if (value === Infinity) return '∞';
-      if (value === -Infinity) return '-∞';
-      return value;
-    }
-
-    const row = [
-      new Date(),
-      'PHASE3_PARITY',
-      cls && cls.name ? cls.name : (cls && cls.id ? cls.id : ''),
-      details.type || '',
-      details.sex || '',
-      details.fromSex || '',
-      details.toSex || '',
-      details.reason || '',
-      formatPenalty(details.penaltyOriginal),
-      formatPenalty(details.penaltyFallback),
-      details.eleveId || ''
-    ];
-
-    if (typeof appendLogRow === 'function') {
-      appendLogRow(row);
-    } else if (typeof logLine === 'function') {
-      logLine('INFO', '📓 P3[' + row[2] + '] ' + JSON.stringify(details));
-    }
-  } catch (err) {
-    if (typeof logLine === 'function') {
-      logLine('WARN', '⚠️ Erreur logParityDecision : ' + err);
-    }
-  }
-}
-
-
+// NOTE: Première définition de logParityDecision supprimée (doublon dans le même fichier).
+// La définition canonique est ci-dessous.
 
 function logParityDecision(cls, details) {
   try {

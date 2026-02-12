@@ -219,35 +219,9 @@ function include(filename) {
 
 // ==================== LANCEURS MODALES ====================
 
-/**
- * Ouvre la Console de Pilotage V3 (interface principale)
- * Appelé depuis le menu "PILOTAGE CLASSE"
- */
-function ouvrirConsolePilotageV3() {
-  const html = HtmlService.createHtmlOutputFromFile('ConsolePilotageV3')
-    .setWidth(1600).setHeight(900);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Console de Pilotage V3 - Expert Edition');
-}
-
-/**
- * Ouvre l'interface de configuration de la structure
- * Permet de définir les effectifs et quotas par classe
- */
-function ouvrirConfigurationStructure() {
-  const html = HtmlService.createHtmlOutputFromFile('ConfigurationComplete')
-    .setWidth(1200).setHeight(800);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Configuration de la Structure');
-}
-
-/**
- * Ouvre l'interface de configuration complète
- * Alias de ouvrirConfigurationStructure()
- */
-function ouvrirConfigurationComplete() {
-  const html = HtmlService.createHtmlOutputFromFile('ConfigurationComplete')
-    .setWidth(1200).setHeight(800);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Configuration Complète');
-}
+// ouvrirConsolePilotageV3() → supprimée (définition canonique dans ConsolePilotageV3_Server.js avec showModelessDialog)
+// ouvrirConfigurationStructure() → supprimée (définition canonique dans Structure.js)
+// ouvrirConfigurationComplete() → supprimée (définition canonique dans ConsolePilotageV3_Server.js)
 
 /**
  * Ouvre le module de création de groupes V4
@@ -777,7 +751,7 @@ function saveCacheData(cacheData) {
  * @param {Object} disposition - Objet {className: {headers: [], students: []}}
  * @returns {Object} {success: boolean, saved: number, failed: number, errors: Array, timestamp: string}
  */
-function saveDispositionToSheets(disposition, ss = null) {
+function saveDispositionToSheets(disposition) {
   try {
     // Validation des paramètres
     if (!disposition || typeof disposition !== 'object' || Object.keys(disposition).length === 0) {
@@ -863,34 +837,8 @@ function loadCacheData() {
   }
 }
 
-/**
- * Sauvegarde un snapshot des élèves
- * @param {Object} disposition - Disposition des élèves par classe
- * @param {string} mode - Mode de sauvegarde
- * @param {Spreadsheet} ss - Instance du spreadsheet (optionnel)
- * @returns {Object} {success: boolean, message: string}
- */
-function saveElevesSnapshot(disposition, mode, ss = null) {
-  try {
-    const ss = getActiveSpreadsheetCached();
-    
-    for (const [className, classData] of Object.entries(disposition)) {
-      const sheet = ss.getSheetByName(className);
-      if (!sheet) continue;
-      
-      const headers = classData.headers || sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const students = classData.students || [];
-      
-      const rowsToWrite = [headers, ...students];
-      const range = sheet.getRange(1, 1, rowsToWrite.length, headers.length);
-      range.setValues(rowsToWrite);
-    }
-    
-    return { success: true, message: 'Snapshot sauvegardé' };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
+// saveElevesSnapshot() → supprimée (définition canonique dans Backend_Eleves.js
+// avec saveStudentsToSheet helper + nettoyage lignes vides)
 
 /**
  * Récupère les paramètres UI
@@ -975,7 +923,7 @@ function verifierMotDePasseAdmin(password) {
  * @param {Spreadsheet} ss - Instance du spreadsheet (optionnel)
  * @returns {Object} {success: boolean, data: Object}
  */
-function loadFINSheetsWithScores(ss = null) {
+function loadFINSheetsWithScores() {
   try {
     const ss = getActiveSpreadsheetCached();
     const finSheets = ss.getSheets().filter(s => SHEET_PATTERNS.FIN.test(s.getName()));
