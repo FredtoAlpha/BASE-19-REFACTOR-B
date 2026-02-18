@@ -565,6 +565,22 @@
         <span>Groupes</span>
       </button>
 
+      <button id="btnSwapHeader" data-tour="swap-btn"
+              class="header-btn flex items-center gap-1.5 rounded-lg
+                     bg-blue-700/90 text-white
+                     border border-blue-600/60
+                     shadow-[0_10px_20px_rgba(37,99,235,0.4)]
+                     hover:bg-blue-600/90
+                     tracking-[-0.03em]
+                     transition-all duration-200"
+              title="Echanger deux eleves entre classes (raccourci S)"
+              aria-label="Activer le mode permutation"
+              aria-pressed="false">
+        <i class="fas fa-exchange-alt text-sm"></i>
+        <span>Echanger</span>
+        <span id="swapHeaderBadge" class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/20 leading-none">OFF</span>
+      </button>
+
       <button id="btnEditer" data-tour="editer-btn"
               class="header-btn flex items-center gap-1.5 rounded-lg
                      bg-slate-800/90 text-white
@@ -578,7 +594,7 @@
               aria-haspopup="menu"
               aria-controls="dropdownEditer">
         <span class="emoji opacity-80">✍</span>
-        <span>Éditer</span>
+        <span>Editer</span>
       </button>
 
       <button id="btnSaveWIP"
@@ -636,6 +652,18 @@
       <!-- Séparateur visuel -->
       <div class="w-px h-6 bg-slate-300 dark:bg-slate-600"></div>
 
+      <!-- Mode Reunion -->
+      <button id="btnModeReunion" data-tour="reunion-btn"
+              class="header-btn flex items-center gap-1.5 rounded-lg
+                     tracking-[-0.03em]
+                     bg-slate-200 text-slate-800 hover:bg-slate-300
+                     dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15
+                     shadow-[0_4px_10px_rgba(0,0,0,0.15)]"
+              title="Mode reunion : affichage optimise pour videoprojecteur (raccourci R)">
+        <i class="fas fa-tv text-sm opacity-80"></i>
+        <span>Reunion</span>
+      </button>
+
       <!-- Aide (isolée) -->
       <button onclick="window.showTutorial()"
               class="header-btn flex items-center gap-1.5 rounded-lg
@@ -651,6 +679,69 @@
     </div>
   </div>
 </header>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SWAP CONTEXT - Bandeau contextuel quand le mode echange est actif
+     S'affiche SOUS le header, remplace la barre harmonie supprimee
+     Hauteur 0 quand inactif = zero pixel perdu
+     ══════════════════════════════════════════════════════════════ -->
+<div id="swapContextBar" class="hidden bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 px-4 py-1.5">
+  <div class="flex items-center justify-center gap-3">
+    <i class="fas fa-exchange-alt text-blue-500 text-sm"></i>
+    <span id="swapInstruction" class="text-sm font-medium text-blue-700 dark:text-blue-300">
+      Cliquez un premier eleve...
+    </span>
+    <button id="swapCancelBtn" class="text-xs text-red-600 hover:text-red-800 dark:text-red-400 font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
+      Annuler
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL WHAT-IF PREVIEW (R5) - Affiche avant de confirmer un swap
+     ══════════════════════════════════════════════════════════════ -->
+<div id="swapPreviewModal" class="fixed inset-0 z-[150000] flex items-center justify-center bg-black/40 backdrop-blur-[2px] hidden transition-opacity duration-150" role="dialog" aria-modal="true" aria-label="Apercu de l'echange">
+  <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 transform transition-all duration-200 scale-95 opacity-0" id="swapPreviewContent">
+
+    <!-- En-tete -->
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <i class="fas fa-exchange-alt text-blue-600"></i> Apercu de l'echange
+      </h3>
+      <button id="swapPreviewClose" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Les deux eleves -->
+    <div class="flex items-center justify-center gap-3 mb-4">
+      <div id="previewEleve1" class="flex-1 bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-center">
+        <div class="text-sm font-bold text-slate-800 dark:text-slate-100" id="previewNom1">--</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400" id="previewClasse1">--</div>
+      </div>
+      <div class="text-2xl text-blue-500 font-bold">&#8644;</div>
+      <div id="previewEleve2" class="flex-1 bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-center">
+        <div class="text-sm font-bold text-slate-800 dark:text-slate-100" id="previewNom2">--</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400" id="previewClasse2">--</div>
+      </div>
+    </div>
+
+    <!-- Impact prevu -->
+    <div id="previewImpact" class="space-y-2 mb-5">
+      <!-- Rempli dynamiquement -->
+    </div>
+
+    <!-- Boutons -->
+    <div class="flex gap-3">
+      <button id="swapPreviewCancel" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm">
+        Annuler
+      </button>
+      <button id="swapPreviewConfirm" class="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all text-sm">
+        <i class="fas fa-check mr-1"></i> Confirmer l'echange
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- Zone principale -->
 <main class="w-full p-4" role="main" aria-label="Répartition des élèves">
@@ -974,12 +1065,13 @@
     <div class="shortcut-item"><span>Actualiser</span><span class="shortcut-key">F5</span></div>
     <div class="shortcut-item"><span>Annuler</span><span class="shortcut-key">Ctrl+Z</span></div>
     <div class="shortcut-item"><span>Refaire</span><span class="shortcut-key">Ctrl+Y</span></div>
-    <div class="shortcut-item"><span>Mode swap</span><span class="shortcut-key">S</span></div>
+    <div class="shortcut-item"><span>Mode echange</span><span class="shortcut-key">S</span></div>
+    <div class="shortcut-item"><span>Mode reunion</span><span class="shortcut-key">R</span></div>
     <div class="shortcut-item"><span>Statistiques</span><span class="shortcut-key">T</span></div>
     <div class="shortcut-item"><span>Mode sombre</span><span class="shortcut-key">D</span></div>
     <div class="shortcut-item"><span>Vue simple</span><span class="shortcut-key">V</span></div>
     <div class="shortcut-item"><span>Tutoriel</span><span class="shortcut-key">H</span></div>
-    <div class="shortcut-item"><span>Fermer modals</span><span class="shortcut-key">Échap</span></div>
+    <div class="shortcut-item"><span>Fermer modals</span><span class="shortcut-key">Echap</span></div>
     </div>
 </div>
 
@@ -1016,6 +1108,9 @@
   
   <!-- 4. CHARGER LE MODULE D'OPTIMISATION -->
   <?!= include('OptimizationPanel'); ?>
+
+  <!-- 5. MODULE UX HARMONIE - Experience enseignant en reunion -->
+  <?!= include('InterfaceV2_UX_Harmonie'); ?>
 
 <!-- Menu Paramètres SUPPRIMÉ - Tout le contenu est maintenant dans le Menu Admin -->
 
