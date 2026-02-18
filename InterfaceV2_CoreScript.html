@@ -282,7 +282,6 @@ function gsRun(fnName, ...args) {
           // Appel correct : d'abord les handlers, puis la fonction
           api
             .withSuccessHandler((result) => {
-              console.log(`✅ ${fnName} succès:`, result);
               resolve(result);
             })
             .withFailureHandler((error) => {
@@ -611,7 +610,6 @@ function canSwap(id1, id2) {
   const memeOPT = opt_1 === opt_2 || (!opt_1 && !opt_2);
 
   if (memeLV2 && memeOPT) {
-    console.log(`✅ Swap autorisé: ${eleve1.nom} ↔ ${eleve2.nom} (mêmes contraintes: LV2=${lv2_1 || 'aucune'}, OPT=${opt_1 || 'aucune'})`);
     return { ok: true };
   }
   
@@ -721,7 +719,6 @@ function canSwap(id1, id2) {
     }
   }
   
-  console.log(`✅ Swap autorisé: ${eleve1.nom} ↔ ${eleve2.nom} (quotas respectés)`);
   return { ok: true };
 }
 
@@ -844,13 +841,9 @@ function handleCardClick(e) {
   STATE.swapFirst = null;
 }
 
-// ========== FONCTION HELPER POUR SIMPLIFIER LES NOMS COMPOSÉS ========== 
-// VERSION 4.3 - Octobre 2025 - InterfaceV2
-// Logique corrigée: premier mot = NOM, dernier mot = PRÉNOM
-console.log('🔄 VERSION 4.3 - Fonction simplifierNomComplet corrigée (premier/dernier mot)');
+// ========== SIMPLIFICATION DES NOMS COMPOSÉS ==========
 
 function simplifierNomComplet(nom, prenom) {
-  // VERSION 4.3 - Logique corrigée: premier mot = NOM, dernier mot = PRÉNOM
   if (!nom && !prenom) return '';
 
   nom = (nom || '').trim().replace(/\s+/g, ' ');
@@ -859,65 +852,31 @@ function simplifierNomComplet(nom, prenom) {
   let finalNom = '';
   let finalPrenom = '';
 
-  // Si on a un prénom séparé, utiliser nom et prénom normalement
   if (prenom) {
-    const nomParts = nom.split(/[\s-]+/).filter(Boolean);
-    const prenomParts = prenom.split(/[\s-]+/).filter(Boolean);
-    finalNom = nomParts[0] || nom;
-    finalPrenom = prenomParts[0] || prenom;
+    finalNom = nom.split(/[\s-]+/).filter(Boolean)[0] || nom;
+    finalPrenom = prenom.split(/[\s-]+/).filter(Boolean)[0] || prenom;
   } else if (nom) {
-    // Pas de prénom séparé → analyser la colonne NOM (qui contient "NOM PRENOM")
     const parts = nom.split(/\s+/).filter(Boolean);
-    
-    if (parts.length >= 2) {
-      // Premier mot = NOM, dernier mot = PRÉNOM
-      finalNom = parts[0];
-      finalPrenom = parts[parts.length - 1];
-    } else {
-      // Un seul mot = nom uniquement
-      finalNom = parts[0] || nom;
-      finalPrenom = '';
-    }
+    finalNom = parts[0];
+    finalPrenom = parts.length >= 2 ? parts[parts.length - 1] : '';
   }
 
   let resultat = `${finalNom} ${finalPrenom}`.trim();
 
   const MAX_LENGTH = 25;
   if (resultat.length > MAX_LENGTH) {
-    const nomPart = finalNom;
-    const prenomPart = finalPrenom;
-
-    const availableForPrenom = MAX_LENGTH - nomPart.length - 1;
-
+    const availableForPrenom = MAX_LENGTH - finalNom.length - 1;
     if (availableForPrenom > 0) {
-      const truncatedPrenom = prenomPart.substring(0, availableForPrenom - 1) + '.';
-      resultat = `${nomPart} ${truncatedPrenom}`.trim();
+      resultat = `${finalNom} ${finalPrenom.substring(0, availableForPrenom - 1)}.`.trim();
     } else {
-      resultat = nomPart.substring(0, MAX_LENGTH - 1) + '.';
+      resultat = finalNom.substring(0, MAX_LENGTH - 1) + '.';
     }
-  }
-
-  // ✅ Logs de débogage désactivés (trop verbeux)
-  // console.log(`DEBUG_SIMPLIFIER: nom="${nom}", prenom="${prenom}"`);
-  // console.log(`DEBUG_SIMPLIFIER: finalNom="${finalNom}", finalPrenom="${finalPrenom}"`);
-  // console.log(`DEBUG_SIMPLIFIER: resultat="${resultat}"`);
-
-  if (nom !== finalNom || prenom !== finalPrenom || resultat.length > MAX_LENGTH) {
-    // DÉSACTIVÉ en mode production (log trop verbeux)
-    // console.log(`✂️ InterfaceV2 v4.3 - Nom simplifié: "${nom} ${prenom}" → "${resultat}" (${resultat.length} car.)`);
   }
 
   return resultat;
 }
 
-// Marquer la version pour éviter les conflits
-simplifierNomComplet.version = '4.3';
-
-// Exposer sur window pour accessibilité globale
-if (typeof window !== 'undefined') {
-  window.simplifierNomComplet = simplifierNomComplet;
-  console.log('✅ simplifierNomComplet VERSION 4.3 exposée globalement depuis InterfaceV2');
-}
+window.simplifierNomComplet = simplifierNomComplet;
 
 // ========== PHASE 3: FONCTIONS UTILITAIRES (DRY) ==========
 
@@ -1357,19 +1316,15 @@ function createClassColumn(classe, eleves) {
     },
     onEnd: handleSortEnd,
     onStart: (evt) => {
-      console.log('🖱️ Drag started:', evt.item.dataset.id);
       // Stocker l'élément en cours de déplacement
       STATE.draggingElement = evt.item;
       STATE.dragStartZone = evt.from;
     },
     onMove: (evt) => {
-      console.log('🖱️ Drag move:', evt.dragged.dataset.id, 'from', evt.from.dataset.classe, 'to', evt.to.dataset.classe);
     }
   });
   
-  // (SUPPRIMÉ : double appel de handleSortEnd - onEnd de SortableJS suffit)
   
-  console.log('🔧 Sortable créé pour zone:', dropZone.dataset.classe);
 
   // Cartes élèves
   clean.forEach(e => {
@@ -1637,7 +1592,6 @@ function renderBoard(data) {
   setTimeout(() => {
     if (typeof initCharts === 'function') {
       initCharts();
-      console.log('📊 Graphiques initialisés après chargement des données');
     }
   }, 200);
 }
@@ -1764,7 +1718,6 @@ async function checkCache() {
     const backendCache = await gsRun('getLastCacheInfo');
 
     if (backendCache && backendCache.exists && backendCache.date) {
-      console.log('✅ Sauvegarde automatique trouvée dans le backend:', backendCache);
       if (restoreBlock) restoreBlock.classList.remove('hidden');
       if (lastDate) {
         const date = new Date(backendCache.date);
@@ -2058,7 +2011,6 @@ const App = {
      * Met à jour les statistiques de toutes les colonnes
      */
     updateAllColumnStats() {
-      console.log('📊 App.UI.updateAllColumnStats - version modulaire');
 
       document.querySelectorAll('.class-column').forEach(column => {
         const className = column.querySelector('.classe-name').textContent;
@@ -2190,7 +2142,6 @@ const App = {
         setTimeout(() => App.Data.saveImmediateCache(), 200);
       }
 
-      console.log(`[App.UI.addStudentToClass] ✅ Élève ajouté avec succès`);
       return true;
     }
   },
@@ -2329,26 +2280,21 @@ const App = {
      * Met à jour les statistiques avancées
      */
     updateAdvancedStats() {
-      console.log('📊 App.Stats.updateAdvancedStats',
                   'chartsReady=', window.areChartsReady?.(),
                   'typeof updateCharts =', typeof updateCharts);
 
       const panel = document.getElementById('statsPanel');
       if (!panel || panel.classList.contains('translate-x-full')) {
-        console.log('📊 Panneau fermé, skip mise à jour');
         return;
       }
 
       if (typeof updateNewMetrics === 'function') {
-        console.log('🔢 updateNewMetrics lancé');
         updateNewMetrics();
       }
 
-      console.log('📊 Appel de updateCharts()...');
       if (typeof updateCharts === 'function') {
         updateCharts();
       }
-      console.log('📊 updateCharts() terminé');
 
       if (typeof updateLV2Details === 'function') {
         updateLV2Details();
@@ -2408,7 +2354,6 @@ const App = {
             const result = await gsRun('saveDispositionToSheets', disposition);
 
             if (result && result.success) {
-              console.log(`💾 Sauvegarde CACHE réussie: ${result.saved} onglets créés`);
 
               // 2. Après succès → on remet le flag à false,
               //    on horodate, on met à jour le badge
@@ -2612,7 +2557,6 @@ async function initializeBridge() {
       console.log(`📡 Contexte reçu: Mode=${mode}, Source=${sourceSheet}`);
 
       localStorage.setItem('mode-selection', mode);
-      console.log(`✅ Mode "${mode}" défini depuis le contexte.`);
       toast(`Contexte chargé depuis la console (Mode: ${mode})`, 'success');
 
       // Cacher le modal de démarrage et lancer l'application
@@ -2659,7 +2603,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
       startupModal.classList.add('hidden');
     });
 
-    // ❌ SUPPRIMÉ : Gestionnaire dupliqué qui causait la double demande de mot de passe
     // La protection par mot de passe est gérée plus bas (ligne ~4287)
   }
   // =======================================================
@@ -3031,7 +2974,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
       setRadioValue('genderDisplay', prefs.symbols || 'colors');
     }
     
-    console.log('✅ Menu Régler (dropdown) initialisé');
   })();
   // =======================================================
   // FONCTION GLOBALE POUR APPLIQUER LES PRÉFÉRENCES DE LISIBILITÉ
@@ -3162,7 +3104,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
           updateCharts();
         }
 
-        console.log('📊 Panneau stats ouvert');
       }, 50);
     });
   };
@@ -3182,7 +3123,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
       floatClose.classList.add('hidden');
     }
 
-    console.log('📊 Panneau stats fermé');
   };
 
   // =======================================================
@@ -3236,7 +3176,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
       }
     });
     
-    console.log('✅ Menu Éditer (dropdown) initialisé');
   })();
 
   // =======================================================
@@ -3268,7 +3207,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
         // Accessibilité propre
         btnComparer.setAttribute('aria-expanded', 'false');
         
-        console.log('📊 Stats fermées via bouton Comparer (panic button)');
         return;
       }
       
@@ -3393,7 +3331,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
           if (btnRegler) {
             btnRegler.setAttribute('aria-expanded', 'false');
           }
-          console.log('⌨️ Menu Régler fermé via Échap');
         }
 
         // Fermer le menu Comparer (le petit dropdown Comparer)
@@ -3403,7 +3340,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
           if (btnComparer) {
             btnComparer.setAttribute('aria-expanded', 'false');
           }
-          console.log('⌨️ Menu Comparer fermé via Échap');
         }
 
         // Fermer le menu Éditer
@@ -3413,368 +3349,229 @@ window.addEventListener('DOMContentLoaded', (event) => {
           if (btnEditer) {
             btnEditer.setAttribute('aria-expanded', 'false');
           }
-          console.log('⌨️ Menu Éditer fermé via Échap');
         }
 
         // Fermer le panneau stats
         if (statsPanel && !statsPanel.classList.contains('translate-x-full')) {
           closeStatsPanel();
-          console.log('⌨️ Panneau stats fermé via Échap');
         }
       }
     });
   })();
 
   // =======================================================
-  // 1.8 GESTION DU MENU ADMIN - PATCH UNIQUE ANTI-CONFLITS
+  // 1.8 GESTION DU MENU ADMIN
   // =======================================================
-  (function AdminMenuFix(){
-    if (window.__ADMIN_FIX_APPLIED__) {
-      console.warn('⚠️ AdminMenuFix déjà appliqué, skip');
-      return;
-    }
-    window.__ADMIN_FIX_APPLIED__ = true;
+  function initAdminMenu() {
+    const adminRoot = document.getElementById('dropdownAdmin');
+    const btnAdmin  = document.getElementById('btnAdmin');
+    if (!adminRoot || !btnAdmin) return;
 
-    // Fonction d'initialisation du menu Admin
-    function initAdminMenu() {
-      // BLOQUER COMPLÈTEMENT toggleAdminMode legacy
-      window.toggleAdminMode = function() {
-        console.error('❌ toggleAdminMode() est DÉSACTIVÉE - Le menu Admin est géré par AdminMenuFix');
-        if (window.toast) toast('❌ Fonction désactivée - Utilisez le menu Admin', 'error');
-      };
-      console.log('🔒 toggleAdminMode() legacy BLOQUÉE globalement');
+    // Supprimer les doublons éventuels de #dropdownAdmin
+    document.querySelectorAll('#dropdownAdmin').forEach((n, i) => { if (i > 0) n.remove(); });
+    adminRoot.setAttribute('data-menu-root', '');
 
-      // 1) Déduplication stricte des #dropdownAdmin (root du menu)
-      const admins = Array.from(document.querySelectorAll('#dropdownAdmin'));
-      if (admins.length === 0) {
-        console.warn('⚠️ AdminMenuFix: #dropdownAdmin non trouvé, abandon');
-        return; // rien à faire si pas de menu trouvé
+    const q          = sel => adminRoot.querySelector(sel);
+    const lockMsg    = q('#adminLockMessage');
+    const content    = q('#adminContent');
+    const btnUnlock  = q('#btnUnlockAdmin');
+    let   btnLock    = q('#btnLockAdmin');
+    const status     = document.getElementById('adminStatusIndicator');
+
+    // État initial : toujours verrouillé au démarrage (sécurité)
+    let isAdminUnlocked = false;
+    localStorage.removeItem('adminUnlocked');
+    localStorage.removeItem('adminForceMode');
+    if (window.STATE) window.STATE.adminMode = false;
+
+    function paintUI() {
+      if (isAdminUnlocked) {
+        lockMsg && lockMsg.classList.add('hidden');
+        content && content.classList.remove('hidden');
+        status && (status.textContent = 'ON', status.classList.add('text-white', 'font-bold'));
+        btnAdmin.classList.remove('bg-red-600', 'hover:bg-red-700');
+        btnAdmin.classList.add('bg-green-700', 'text-white', 'hover:bg-green-800');
+      } else {
+        lockMsg && lockMsg.classList.remove('hidden');
+        content && content.classList.add('hidden');
+        status && (status.textContent = 'OFF', status.classList.remove('text-white', 'font-bold'));
+        btnAdmin.classList.remove('bg-green-700', 'hover:bg-green-800');
+        btnAdmin.classList.add('bg-red-600', 'text-white', 'hover:bg-red-700');
       }
-      const adminRoot = admins[0];
-      admins.slice(1).forEach(n => n.remove()); // supprime tous les doublons
-      if (!adminRoot.hasAttribute('data-menu-root')) adminRoot.setAttribute('data-menu-root','');
+    }
+    paintUI();
 
-      // 2) Récupérer les éléments SCOPÉS DANS CE ROOT (évite les collisions d'ID)
-      const q    = sel => adminRoot.querySelector(sel);
-      const btnAdmin = document.getElementById('btnAdmin'); // le bouton header a un id unique
+    // Menu fermé au démarrage
+    adminRoot.classList.add('hidden', 'opacity-0', 'scale-95');
 
-      if (!btnAdmin) {
-        console.warn('⚠️ AdminMenuFix: bouton #btnAdmin non trouvé, abandon');
+    function openMenu() {
+      adminRoot.classList.remove('hidden');
+      void adminRoot.offsetWidth;
+      requestAnimationFrame(() => {
+        adminRoot.classList.remove('opacity-0', 'scale-95');
+        adminRoot.classList.add('opacity-100', 'scale-100');
+      });
+    }
+
+    function closeMenu() {
+      adminRoot.classList.remove('opacity-100', 'scale-100');
+      adminRoot.classList.add('opacity-0', 'scale-95');
+      setTimeout(() => adminRoot.classList.add('hidden'), 200);
+    }
+
+    // Toggle du dropdown
+    btnAdmin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const rect = btnAdmin.getBoundingClientRect();
+      adminRoot.style.top  = `${rect.bottom + 8}px`;
+      adminRoot.style.left = `${rect.right - 320}px`;
+      adminRoot.style.right = 'auto';
+      adminRoot.classList.contains('hidden') ? openMenu() : closeMenu();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!adminRoot.contains(e.target) && e.target !== btnAdmin && !adminRoot.classList.contains('hidden')) {
+        closeMenu();
+      }
+    });
+    adminRoot.addEventListener('click', e => e.stopPropagation());
+
+    // Mot de passe
+    const passwordInput = q('#adminPasswordInput');
+    const passwordError = q('#adminPasswordError');
+    const btnToggleVisibility = q('#btnTogglePasswordVisibility');
+
+    if (btnToggleVisibility && passwordInput) {
+      btnToggleVisibility.addEventListener('click', () => {
+        const isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
+        btnToggleVisibility.querySelector('i').className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+      });
+    }
+
+    async function checkPassword(pwd) {
+      if (typeof google !== 'undefined' && google.script?.run?.getAdminPasswordFromConfig) {
+        return new Promise((resolve) => {
+          google.script.run
+            .withSuccessHandler(configPwd => resolve(pwd === configPwd || (CONFIG && pwd === CONFIG.adminPassword)))
+            .withFailureHandler(() => resolve(CONFIG && pwd === CONFIG.adminPassword))
+            .getAdminPasswordFromConfig();
+        });
+      }
+      return CONFIG && pwd === CONFIG.adminPassword;
+    }
+
+    async function unlockFlow() {
+      const pwd = passwordInput ? passwordInput.value.trim() : '';
+      if (!pwd) {
+        passwordError && (passwordError.textContent = 'Veuillez entrer un mot de passe');
+        passwordError && passwordError.classList.remove('hidden');
+        passwordInput && passwordInput.classList.add('border-red-500');
         return;
       }
-      const lockMsg  = q('#adminLockMessage');
-      const content  = q('#adminContent');
-      const btnUnlock = q('#btnUnlockAdmin');
-      let   btnLock   = q('#btnLockAdmin'); // peut ne pas exister
-      const status    = document.getElementById('adminStatusIndicator'); // optionnel
 
-      // 3) État initial (TOUJOURS verrouillé par défaut)
-      // IMPORTANT: On ignore localStorage.adminUnlocked ET adminForceMode au démarrage pour forcer le verrouillage
-      // L'admin doit déverrouiller manuellement à chaque session (sécurité)
-      let isAdminUnlocked = false; // TOUJOURS verrouillé au démarrage
+      if (await checkPassword(pwd)) {
+        isAdminUnlocked = true;
+        localStorage.setItem('adminUnlocked', 'true');
+        paintUI();
+        closeMenu();
+        toast('Mode Admin activé', 'success');
+        passwordInput && (passwordInput.value = '');
+        passwordError && passwordError.classList.add('hidden');
+        passwordInput && passwordInput.classList.remove('border-red-500');
+      } else {
+        passwordError && (passwordError.textContent = 'Mot de passe incorrect');
+        passwordError && passwordError.classList.remove('hidden');
+        passwordInput && passwordInput.classList.add('border-red-500');
+        passwordInput && passwordInput.select();
+      }
+    }
 
-      // Nettoyer localStorage au démarrage (sécurité maximale)
+    btnUnlock && btnUnlock.addEventListener('click', (e) => { e.preventDefault(); unlockFlow(); });
+    passwordInput && passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); unlockFlow(); } });
+    passwordInput && passwordInput.addEventListener('input', () => {
+      passwordError && passwordError.classList.add('hidden');
+      passwordInput.classList.remove('border-red-500');
+    });
+
+    // Bouton Verrouiller (créé si absent)
+    if (!btnLock) {
+      btnLock = document.createElement('button');
+      btnLock.id = 'btnLockAdmin';
+      btnLock.className = 'w-full px-4 py-2 my-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors';
+      btnLock.innerHTML = '<i class="fas fa-lock mr-2"></i> Verrouiller le menu Admin';
+      content && content.appendChild(btnLock);
+    }
+    btnLock.addEventListener('click', () => {
       localStorage.removeItem('adminUnlocked');
       localStorage.removeItem('adminForceMode');
       if (window.STATE) window.STATE.adminMode = false;
-      console.log('🔒 localStorage nettoyé au démarrage (sécurité maximale)');
+      isAdminUnlocked = false;
+      paintUI();
+      adminRoot.classList.add('hidden');
+      toast('Mode Admin verrouillé', 'info');
+    });
 
-      function paintLockedUI() {
-        lockMsg && lockMsg.classList.remove('hidden');
-        content && content.classList.add('hidden');
-        status  && (status.textContent = 'OFF', status.classList.remove('text-white','font-bold'));
-        if (btnAdmin) {
-          btnAdmin.classList.remove('bg-green-700','hover:bg-green-800');
-          btnAdmin.classList.add('bg-red-600','text-white','hover:bg-red-700');
-        }
-        console.log('🔒 Admin verrouillé - état OFF (par défaut)');
-      }
+    // Accordéon scopé
+    window.toggleSection = window.toggleSection || function(key, el) {
+      const root = el?.closest('[data-menu-root]') || document;
+      const section = root.querySelector(`[data-section-id="${key}"]`);
+      const body = section?.querySelector('.section-body') || section;
+      const icon = section?.querySelector('.section-icon') || el?.querySelector('.fa-chevron-down');
+      if (!body) return;
+      body.classList.toggle('hidden');
+      icon && icon.classList.toggle('rotate-180');
+    };
 
-      function paintUnlockedUI() {
-        lockMsg && lockMsg.classList.add('hidden');
-        content && content.classList.remove('hidden');
-        status  && (status.textContent = 'ON', status.classList.add('text-white','font-bold'));
-        if (btnAdmin) {
-          btnAdmin.classList.remove('bg-red-600','hover:bg-red-700');
-          btnAdmin.classList.add('bg-green-700','text-white','hover:bg-green-800');
-        }
-        console.log('✅ Admin déverrouillé - état ON');
-      }
+    // Câblage des boutons Admin
+    const wireButton = (id, handler) => {
+      const btn = q(`#${id}`);
+      btn && btn.addEventListener('click', () => { handler(); adminRoot.classList.add('hidden'); });
+    };
 
-      function applyState() {
-        (isAdminUnlocked ? paintUnlockedUI : paintLockedUI)();
-      }
-      applyState();
+    wireButton('btnSourcesAdmin', () => window.openStartupModal && openStartupModal({ force: true }));
+    wireButton('btnOptimizationAdmin', () => {
+      if (typeof OptimizationPanel !== 'undefined' && OptimizationPanel.open) OptimizationPanel.open();
+      else if (window.openOptimizationPanel) window.openOptimizationPanel();
+      else toast('Module d\'optimisation non chargé', 'warning');
+    });
+    wireButton('menuDarkModeAdmin', () => window.toggleDarkMode && toggleDarkMode());
+    wireButton('menuZoomAdmin', () => {
+      const cards = document.querySelectorAll('.student-card');
+      const isZoomed = cards[0]?.style.transform === 'scale(1.1)';
+      cards.forEach(card => card.style.transform = isZoomed ? 'scale(1)' : 'scale(1.1)');
+      toast(isZoomed ? 'Zoom désactivé' : 'Zoom activé', 'info');
+    });
+    wireButton('menuFullscreenAdmin', () => {
+      document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    });
+    wireButton('menuImportScoresAdmin', () => window.openImportScoresModal && openImportScoresModal());
+    wireButton('btnExportAdmin', () => window.exportData && exportData());
+    wireButton('menuRulesModal', () => window.openRulesModal && openRulesModal());
 
-      // GARANTIR que le menu est FERMÉ au démarrage
-      adminRoot.classList.add('hidden', 'opacity-0', 'scale-95');
-      console.log('🔒 Menu Admin fermé par défaut');
+    // Mode Force Admin
+    const toggleForce = q('#toggleAdminForceMode');
+    if (toggleForce) {
+      toggleForce.checked = false;
 
-      // Fonctions d'animation fluide
-      function openMenu() {
-        console.log('🎬 openMenu() appelée');
-        console.log('   Classes avant:', adminRoot.className);
-        adminRoot.classList.remove('hidden');
-        console.log('   Classes après remove hidden:', adminRoot.className);
-        // Force reflow pour que la transition fonctionne
-        void adminRoot.offsetWidth;
-        requestAnimationFrame(() => {
-          console.log('   Dans requestAnimationFrame');
-          adminRoot.classList.remove('opacity-0', 'scale-95');
-          adminRoot.classList.add('opacity-100', 'scale-100');
-          console.log('   Classes finales:', adminRoot.className);
-          console.log('   Style final:', adminRoot.style.cssText);
-        });
-      }
+      toggleForce.addEventListener('change', () => {
+        const isOn = toggleForce.checked;
+        if (window.STATE) window.STATE.adminMode = isOn;
+        localStorage.setItem('adminForceMode', isOn);
 
-      function closeMenu() {
-        adminRoot.classList.remove('opacity-100', 'scale-100');
-        adminRoot.classList.add('opacity-0', 'scale-95');
-        // Attendre la fin de l'animation avant de cacher
-        setTimeout(() => {
-          adminRoot.classList.add('hidden');
-        }, 200); // Correspond à duration-200
-      }
+        toast(isOn
+          ? 'Mode Force activé - Contraintes ignorées'
+          : 'Mode Force désactivé - Contraintes respectées',
+          isOn ? 'warning' : 'success'
+        );
 
-      // 4) Positionnement + toggle du dropdown Admin (ouvre toujours le même root)
-      console.log('✅ Attachement listener click sur btnAdmin');
-      btnAdmin.addEventListener('click', (e) => {
-        e.stopPropagation();
-        console.log('🖱️ Clic sur btnAdmin détecté');
-        const rect = btnAdmin.getBoundingClientRect();
-        adminRoot.style.top  = `${rect.bottom + 8}px`;
-        adminRoot.style.left = `${rect.right - 320}px`;
-        adminRoot.style.right = 'auto';
-
-        // Toggle avec animation
-        const isHidden = adminRoot.classList.contains('hidden');
-        console.log('   Menu actuellement caché?', isHidden);
-        if (isHidden) {
-          openMenu();
-        } else {
-          closeMenu();
-        }
+        if (typeof renderColumns === 'function') renderColumns();
       });
-      // Fermer au clic extérieur
-      document.addEventListener('click', (e) => {
-        if (!adminRoot.contains(e.target) && e.target !== btnAdmin) {
-          if (!adminRoot.classList.contains('hidden')) {
-            closeMenu();
-          }
-        }
-      });
-      adminRoot.addEventListener('click', e => e.stopPropagation());
-
-      // 5) Déverrouillage par mot de passe avec champ élégant (pas de prompt!)
-      const passwordInput = q('#adminPasswordInput');
-      const passwordError = q('#adminPasswordError');
-      const btnToggleVisibility = q('#btnTogglePasswordVisibility');
-
-      // Toggle visibilité du mot de passe
-      if (btnToggleVisibility && passwordInput) {
-        btnToggleVisibility.addEventListener('click', () => {
-          const isPassword = passwordInput.type === 'password';
-          passwordInput.type = isPassword ? 'text' : 'password';
-          const icon = btnToggleVisibility.querySelector('i');
-          icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
-        });
-      }
-
-      // Fonction de vérification du mot de passe
-      async function checkPassword(pwd) {
-        // Essayer d'abord avec le mot de passe du serveur (_CONFIG B3)
-        if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.getAdminPasswordFromConfig) {
-          return new Promise((resolve) => {
-            google.script.run
-              .withSuccessHandler(function(configPassword){
-                resolve(pwd === configPassword || (window.CONFIG && pwd === CONFIG.adminPassword));
-              })
-              .withFailureHandler(function(err){
-                console.error('getAdminPasswordFromConfig KO:', err);
-                // Fallback sur CONFIG.adminPassword
-                resolve(window.CONFIG && pwd === CONFIG.adminPassword);
-              })
-              .getAdminPasswordFromConfig();
-          });
-        }
-        // Fallback direct
-        return window.CONFIG && pwd === CONFIG.adminPassword;
-      }
-
-      // Fonction de déverrouillage
-      async function unlockFlow() {
-        const pwd = passwordInput ? passwordInput.value.trim() : '';
-
-        if (!pwd) {
-          passwordError && (passwordError.textContent = 'Veuillez entrer un mot de passe');
-          passwordError && passwordError.classList.remove('hidden');
-          passwordInput && passwordInput.classList.add('border-red-500');
-          return;
-        }
-
-        const isValid = await checkPassword(pwd);
-
-        if (isValid) {
-          isAdminUnlocked = true;
-          localStorage.setItem('adminUnlocked','true');
-          applyState();
-          closeMenu(); // Fermer le menu avec animation après déverrouillage
-          window.toast && toast('🔓 Mode Admin activé','success');
-          // Effacer le champ
-          passwordInput && (passwordInput.value = '');
-          passwordError && passwordError.classList.add('hidden');
-          passwordInput && passwordInput.classList.remove('border-red-500');
-        } else {
-          passwordError && (passwordError.textContent = 'Mot de passe incorrect');
-          passwordError && passwordError.classList.remove('hidden');
-          passwordInput && passwordInput.classList.add('border-red-500');
-          passwordInput && passwordInput.select(); // Sélectionner le texte pour faciliter la correction
-        }
-      }
-
-      // Clic sur le bouton Déverrouiller
-      btnUnlock && btnUnlock.addEventListener('click', (e)=>{
-        e.preventDefault();
-        unlockFlow();
-      });
-
-      // Appuyer sur Entrée dans le champ
-      passwordInput && passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          unlockFlow();
-        }
-      });
-
-      // Effacer l'erreur quand on tape
-      passwordInput && passwordInput.addEventListener('input', () => {
-        passwordError && passwordError.classList.add('hidden');
-        passwordInput.classList.remove('border-red-500');
-      });
-
-      // 6) Bouton "Verrouiller" cohérent (créé si absent)
-      if (!btnLock) {
-        btnLock = document.createElement('button');
-        btnLock.id = 'btnLockAdmin';
-        btnLock.className = 'w-full px-4 py-2 my-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors';
-        btnLock.innerHTML = '<i class="fas fa-lock mr-2"></i> Verrouiller le menu Admin';
-        content && content.appendChild(btnLock);
-      }
-      btnLock.addEventListener('click', ()=>{
-        localStorage.removeItem('adminUnlocked');
-        localStorage.removeItem('adminForceMode');
-        if (window.STATE) window.STATE.adminMode = false;
-        if (!forceMode) isAdminUnlocked = false; // si forceMode=true, on reste ON
-        applyState();
-        adminRoot.classList.add('hidden');
-        window.toast && toast('🔒 Mode Admin verrouillé','info');
-      });
-
-      // 7) Garantir l'accordéon (FILTRER / AIDE) dans CE menu (scopé)
-      window.toggleSection = window.toggleSection || function(key, el){
-        const root = el?.closest('[data-menu-root]') || document;
-        const section = root.querySelector(`[data-section-id="${key}"]`);
-        const body = section?.querySelector('.section-body') || section || root.getElementById && root.getElementById(key+'Section');
-        const icon = section?.querySelector('.section-icon') || el?.querySelector('.fa-chevron-down');
-        if (!body) return;
-        body.classList.toggle('hidden');
-        icon && icon.classList.toggle('rotate-180');
-      };
-
-      // 8) Câblage des boutons Admin (scopé dans adminRoot)
-      const wireButton = (id, handler) => {
-        const btn = q(`#${id}`);
-        btn && btn.addEventListener('click', () => {
-          handler();
-          adminRoot.classList.add('hidden');
-        });
-      };
-
-      wireButton('btnSourcesAdmin', () => window.openStartupModal && openStartupModal({ force: true }));
-      wireButton('btnOptimizationAdmin', () => {
-        if (typeof OptimizationPanel !== 'undefined' && OptimizationPanel.open) {
-          OptimizationPanel.open();
-        } else if (window.openOptimizationPanel) {
-          window.openOptimizationPanel();
-        } else {
-          console.warn('OptimizationPanel non disponible');
-          window.toast && toast('Module d\'optimisation non chargé', 'warning');
-        }
-      });
-      wireButton('menuDarkModeAdmin', () => window.toggleDarkMode && toggleDarkMode());
-      wireButton('menuZoomAdmin', () => {
-        const cards = document.querySelectorAll('.student-card');
-        const isZoomed = cards[0]?.style.transform === 'scale(1.1)';
-        cards.forEach(card => card.style.transform = isZoomed ? 'scale(1)' : 'scale(1.1)');
-        window.toast && toast(isZoomed ? 'Zoom désactivé' : 'Zoom activé', 'info');
-      });
-      wireButton('menuFullscreenAdmin', () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen();
-        } else {
-          document.exitFullscreen();
-        }
-      });
-      wireButton('menuImportScoresAdmin', () => window.openImportScoresModal && openImportScoresModal());
-      wireButton('btnExportAdmin', () => window.exportData && exportData());
-      wireButton('menuRulesModal', () => window.openRulesModal && openRulesModal());
-
-      // 9) Mode Force Admin (toggle)
-      const toggleForce = q('#toggleAdminForceMode');
-      if (toggleForce) {
-        // TOUJOURS désactivé au démarrage (sécurité)
-        toggleForce.checked = false;
-        if (window.STATE) window.STATE.adminMode = false;
-        console.log('🔒 Mode Force désactivé au démarrage (sécurité)');
-
-        toggleForce.addEventListener('change', () => {
-          const isOn = toggleForce.checked;
-          console.log('🔄 Toggle Mode Force changé:', isOn);
-          console.log('   window.STATE existe?', !!window.STATE);
-          console.log('   STATE existe?', typeof STATE !== 'undefined');
-
-          if (window.STATE) {
-            window.STATE.adminMode = isOn;
-            console.log('   ✅ window.STATE.adminMode =', window.STATE.adminMode);
-          } else {
-            console.error('   ❌ window.STATE n\'existe pas!');
-          }
-
-          localStorage.setItem('adminForceMode', isOn);
-
-          if (isOn) {
-            window.toast && toast('⚠️ Mode Force activé - Toutes les contraintes sont ignorées', 'warning');
-            console.log('🔓 Mode Admin Force: ON - Déplacements libres (FIXE, PERMUT, CONDI ignorés)');
-            console.log('   STATE.adminMode =', STATE?.adminMode);
-          } else {
-            window.toast && toast('✅ Mode Force désactivé - Contraintes respectées', 'success');
-            console.log('🔒 Mode Admin Force: OFF - Contraintes actives');
-            console.log('   STATE.adminMode =', STATE?.adminMode);
-          }
-
-          // 🔄 Rafraîchir l'affichage pour mettre à jour les attributs draggable des cartes
-          console.log('🔄 Rafraîchissement de l\'affichage pour le mode Force...');
-          if (typeof renderColumns === 'function') {
-            renderColumns();
-            console.log('   ✅ renderColumns() appelé');
-          } else {
-            console.error('   ❌ renderColumns n\'existe pas!');
-          }
-        });
-      }
-
-      console.log('✅ AdminMenuFix: Initialisation complète');
     }
+  }
 
-    // Appel différé de initAdminMenu() pour garantir que tous les éléments DOM sont rendus
-    // Utilise setTimeout(0) pour placer l'init à la fin de la queue d'événements
-    console.log('⏳ AdminMenuFix: Attente de la fin du rendu DOM...');
-    setTimeout(() => {
-      console.log('✅ AdminMenuFix: Début initialisation du menu Admin');
-      initAdminMenu();
-    }, 0);
-
-  })();
+  // Initialisation différée pour garantir le rendu DOM
+  setTimeout(initAdminMenu, 0);
 
   // =======================================================
   // 2. LOGIQUE PRINCIPALE DE L'APPLICATION
@@ -3962,8 +3759,6 @@ window.addEventListener('DOMContentLoaded', (event) => {
   // ========== GESTION UNDO/REDO ==========
 // Fonctions déjà définies plus haut
   
-  // ========== MODE ADMIN - SUPPRIMÉ ==========
-  // La fonction toggleAdminMode() legacy a été COMPLÈTEMENT SUPPRIMÉE
   // Le menu Admin est géré UNIQUEMENT par AdminMenuFix (ligne 3070)
   // Toute tentative d'appeler toggleAdminMode() sera bloquée par AdminMenuFix
   
@@ -4391,7 +4186,6 @@ function toggleViewMode() {
   }
   
   // ========== MISE À JOUR INTELLIGENTE DU PANEAU DES STATISTIQUES ==========
-// (ANCIENNE VERSION SUPPRIMÉE - REMPLACÉE PAR LA VERSION PROTÉGÉE)
 
 // ========== GRAPHIQUES ==========
 function initCharts() {
@@ -4645,7 +4439,6 @@ function initCharts() {
     
     // Initialiser avec COM
     updateCharts('COM');
-    console.log('✅ Graphiques initialisés avec succès');
   }
   
   // Variable locale pour le type de score actuel (comme dans la version qui fonctionne)
@@ -4683,11 +4476,8 @@ function initCharts() {
   }
   
   function updateCharts(scoreType = null) {
-    console.log('🚨 updateCharts DÉBUT - scoreType:', scoreType);
     try {
-      console.log('📊 updateCharts appelée avec scoreType:', scoreType);
       if (!scoreType) scoreType = currentScoreType;
-      console.log('📊 ScoreType final:', scoreType);
 
     // Collecter les données par classe
     const dataByClass = {};
@@ -4852,24 +4642,14 @@ function initCharts() {
     updateNewMetrics();
     updateLV2Details();
     
-    console.log('📊 Mise à jour des graphiques terminée');
   } catch (error) {
-    console.error('❌ Erreur dans updateCharts:', error);
+    console.error('Erreur dans updateCharts:', error);
   }
-  console.log('🚨 updateCharts FIN');
 }
 
-// --- PATCH unicité updateCharts ---------------------------------
-if (typeof window.updateChartsRiche === 'undefined') {
-  window.updateChartsRiche = updateCharts;   // on mémorise la vraie
-}
-window.updateCharts = window.updateChartsRiche; // on écrase l'ancienne
-// ----------------------------------------------------------------
-
-// Attacher updateCharts à window
 window.updateCharts = updateCharts;
   
-  // CORRECTION PROBLÈME 5 : MODE SOMBRE
+  // ========== MODE SOMBRE ==========
   function toggleDarkMode() {
     STATE.darkMode = !STATE.darkMode;
     document.body.classList.toggle('dark-mode');
@@ -4916,7 +4696,7 @@ window.updateCharts = updateCharts;
   window.toggleDarkMode = toggleDarkMode;
   window.setDarkMode = setDarkMode;
   
-  // CORRECTION PROBLÈME 6 : MODE ZOOM
+  // ========== MODE ZOOM ==========
   function toggleZoom() {
     STATE.zoomMode = !STATE.zoomMode;
     document.body.classList.toggle('zoom-cards');
@@ -5072,7 +4852,7 @@ window.updateCharts = updateCharts;
     });
   }
   
-  // CORRECTION PROBLÈME 7 : RACCOURCIS CLAVIER
+  // ========== AIDE RACCOURCIS CLAVIER ==========
   function toggleKeyboardHelp() {
     const help = document.getElementById('keyboardShortcuts');
     help.classList.toggle('hidden');
@@ -5120,7 +4900,6 @@ window.updateCharts = updateCharts;
         let successCount = 0;
         const errors = [];
 
-        console.log(`📦 Sauvegarde progressive de ${totalClasses} classe(s)...`);
 
         for (let i = 0; i < totalClasses; i++) {
           const classe = classes[i];
@@ -5142,7 +4921,6 @@ window.updateCharts = updateCharts;
               console.error(`❌ Échec sauvegarde ${classe}:`, result);
             } else {
               successCount++;
-              console.log(`✅ ${classe} sauvegardée (${successCount}/${totalClasses})`);
             }
           } catch (err) {
             errors.push(`❌ ${classe}: ${err.message}`);
@@ -5176,7 +4954,6 @@ window.updateCharts = updateCharts;
 
         // Utiliser le mode forcé si fourni, sinon STATE.currentMode
         const modeToUse = forcedMode || STATE.currentMode;
-        console.log(`📊 Sauvegarde ${saveFunctionName} avec mode: ${modeToUse}`);
 
         const result = await gsRun(saveFunctionName, disposition, modeToUse);
 
@@ -5454,7 +5231,6 @@ window.updateCharts = updateCharts;
     
 // ========== FONCTION D'INITIALISATION UNIVERSELLE ==========
 async function initRepartitionApp() {
-  console.log('🚀 Init universelle...');
   let mode = localStorage.getItem('mode-selection');
   
   if (!mode) {
@@ -5531,87 +5307,56 @@ window.gsRun = gsRun;
   const closeBtn = document.getElementById('closeStartupModal');
   const btnRestore = document.getElementById('btnRestoreCache');
 
-  console.log('🔧 AUDIT: Attachement des event listeners du modal de démarrage');
-  console.log('  - Modal trouvé:', !!modal);
-  console.log('  - Badge trouvé:', !!badge);
-  console.log('  - CloseBtn trouvé:', !!closeBtn);
-  console.log('  - BtnRestore trouvé:', !!btnRestore);
-
   if (closeBtn) {
     closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
-    console.log('  ✅ Event listener attaché: closeBtn');
   }
 
   if (badge) {
     badge.addEventListener('dblclick', () => openStartupModal({ force: true }));
-    console.log('  ✅ Event listener attaché: badge');
   }
 
   if (modal) {
-    const buttons = modal.querySelectorAll('button[data-mode]');
-    console.log('  - Nombre de boutons [data-mode] trouvés:', buttons.length);
-    buttons.forEach((btn, index) => {
-      const mode = btn.dataset.mode;
-      console.log(`    - Bouton ${index + 1}: mode="${mode}"`);
-
-      btn.addEventListener('click', async e => { // Notez "async"
+    modal.querySelectorAll('button[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', async e => {
         const mode = e.currentTarget.dataset.mode;
-        console.log(`🖱️ CLIC sur bouton mode: ${mode}`);
 
-        // ❌ BLOQUER SOURCES (non implémenté)
         if (mode === 'SOURCES') {
-          alert('⚠️ Base Pronote non implémentée. Cette fonctionnalité sera disponible prochainement.');
+          alert('Base Pronote non implémentée. Cette fonctionnalité sera disponible prochainement.');
           return;
         }
 
-        // ✅ CORRECTION : Protéger PREVIOUS et FIN avec mot de passe admin
+        // Protéger PREVIOUS et FIN avec mot de passe admin
         if ((mode === 'PREVIOUS' || mode === 'FIN') && !STATE.adminMode) {
-          console.log(`🔐 Demande mot de passe admin pour mode: ${mode}`);
           const password = prompt('Veuillez entrer le mot de passe administrateur :', '');
-          if (password === null) {
-            console.log('❌ Mot de passe annulé par l\'utilisateur');
-            return; // Annulé par l'utilisateur
-          }
+          if (password === null) return;
 
           try {
-            console.log('⏳ Vérification du mot de passe admin...');
             const result = await gsRun('verifierMotDePasseAdmin', password);
             if (!result || !result.success) {
-              console.log('❌ Mot de passe incorrect');
               alert('Mot de passe incorrect.');
               return;
             }
-            console.log('✅ Mot de passe correct, adminMode activé');
             STATE.adminMode = true;
           } catch (err) {
-            console.error('💥 Erreur vérification mot de passe:', err);
+            console.error('Erreur vérification mot de passe:', err);
             alert('Erreur lors de la vérification du mot de passe.');
             return;
           }
         }
 
-        console.log(`💾 Enregistrement du mode: ${mode} dans localStorage`);
         localStorage.setItem('mode-selection', mode);
         modal.classList.add('hidden');
-        console.log(`🚀 Appel initRepartitionApp() pour mode: ${mode}`);
         initRepartitionApp();
       });
     });
-    console.log('  ✅ Event listeners attachés à tous les boutons [data-mode]');
-  } else {
-    console.error('  ❌ ERREUR: Modal introuvable! Les event listeners ne peuvent pas être attachés.');
   }
 
-  if(btnRestore) {
+  if (btnRestore) {
     btnRestore.addEventListener('click', () => {
-        console.log('🖱️ CLIC sur btnRestoreCache');
-        restoreCache();
-        modal.classList.add('hidden');
+      restoreCache();
+      modal.classList.add('hidden');
     });
-    console.log('  ✅ Event listener attaché: btnRestore');
   }
-
-  console.log('✅ AUDIT: Attachement des event listeners terminé');
   
   // Branche les écouteurs d'événements principaux
   setupEventListeners(); 
@@ -5619,58 +5364,7 @@ window.gsRun = gsRun;
   
   // ========== NOUVELLES FONCTIONNALITÉS ==========
   
-  // Variable globale pour le filtre actif
-  let activeFilter = 'all';
   let focusedColumn = null;
-
-  // Fonction de filtrage rapide
-  function applyQuickFilter(filter) {
-    activeFilter = filter;
-
-    // Mettre à jour les boutons
-    document.querySelectorAll('.filter-btn, .filter-btn-compact').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.filter === filter);
-    });
-
-    // Appliquer le filtre
-    document.querySelectorAll('.student-card').forEach(card => {
-      const eleve = STATE.students[card.dataset.id];
-      if (!eleve) return;
-
-      let match = false;
-
-      switch (filter) {
-        case 'all':
-          match = true;
-          break;
-        case 'PERMUT':
-        case 'FIXE':
-          match = eleve.mobilite === filter;
-          break;
-        case 'ESP':
-        case 'ITA':
-        case 'ALL':
-          match = eleve.lv2 === filter;
-          break;
-        case 'D':
-          match = !!eleve.disso;
-          break;
-        case 'A':
-          match = !!eleve.asso;
-          break;
-      }
-
-      card.classList.toggle('filtered-out', !match);
-    });
-
-    // Afficher un message
-    if (filter === 'all') {
-      toast('Tous les élèves affichés', 'info');
-    } else {
-      const filtered = document.querySelectorAll('.student-card:not(.filtered-out)').length;
-      toast(`${filtered} élève(s) avec filtre ${filter}`, 'info');
-    }
-  }
 
   // Fonction d'export image
   window.exportAsImage = async function() {
@@ -5710,16 +5404,14 @@ window.gsRun = gsRun;
     }
   };
 
-  // Améliorer le système d'historique existant
   function addToHistory(action) {
     action.timestamp = new Date().toISOString();
-    
     if (action.eleveId) {
       const eleve = STATE.students[action.eleveId];
-      action.eleveName = eleve ? `${eleve.nom} ${eleve.prenom}` : 'Inconnu';
+      action.eleveName = eleve ? `${eleve.nom} ${eleve.prenom || ''}` : 'Inconnu';
     }
-    
-    STATE.history.push(action);
+    if (!STATE.historyTimeline) STATE.historyTimeline = [];
+    STATE.historyTimeline.push(action);
     updateHistoryPanel();
   }
 
@@ -5727,9 +5419,6 @@ window.gsRun = gsRun;
     const panel = document.getElementById('historyPanel');
     panel.classList.toggle('open');
   };
-
-  // SUPPRIMÉ - Première version de updateHistoryPanel
-  // Remplacée par la version complète plus bas
 
   function revertToPoint(index) {
     if (confirm(`Revenir à cet état ? (${STATE.history.length - index - 1} actions seront annulées)`)) {
@@ -6042,7 +5731,6 @@ function updateNewMetrics() {
   const metricsReady = document.getElementById('totalStudentsMetric');
   if (!metricsReady) return; // panneau pas encore injecté
   
-  console.log('🔢 Recalcul metrics - début');
   
   // Total élèves (uniquement dans les vraies classes)
   let totalStudents = 0;
@@ -6063,12 +5751,10 @@ function updateNewMetrics() {
     });
   });
   
-  console.log('🔢 Recalcul metrics', {totalStudents, filles, totalClasses});
   
   const totalElement = document.getElementById('totalStudentsMetric');
   if (totalElement) {
     totalElement.textContent = totalStudents;
-    console.log('🔢 totalStudentsMetric mis à jour:', totalStudents);
   } else {
     console.warn('❓ métrique manquante dans le DOM : totalStudentsMetric');
   }
@@ -6078,7 +5764,6 @@ function updateNewMetrics() {
   const ratioElement = document.getElementById('genderBalanceMetric');
   if (ratioElement) {
     ratioElement.textContent = `${ratio}% F`;
-    console.log('🔢 genderBalanceMetric mis à jour:', `${ratio}% F`);
   } else {
     console.warn('❓ métrique manquante dans le DOM : genderBalanceMetric');
   }
@@ -6088,7 +5773,6 @@ function updateNewMetrics() {
   const avgElement = document.getElementById('avgClassSizeMetric');
   if (avgElement) {
     avgElement.textContent = avgClass;
-    console.log('🔢 avgClassSizeMetric mis à jour:', avgClass);
   } else {
     console.warn('❓ métrique manquante dans le DOM : avgClassSizeMetric');
   }
@@ -6097,12 +5781,10 @@ function updateNewMetrics() {
   const conformityElement = document.getElementById('conformityScoreMetric');
   if (conformityElement) {
     conformityElement.textContent = '✅ OK';
-    console.log('🔢 conformityScoreMetric mis à jour: ✅ OK');
   } else {
     console.warn('❓ métrique manquante dans le DOM : conformityScoreMetric');
   }
   
-  console.log('🔢 Recalcul metrics - terminé');
 }
 
 function updateLV2Details() {
@@ -6235,7 +5917,6 @@ window.addEventListener('resize', () => {
   }, 100);
 });
 
-// (FONCTION openStartupModal SUPPRIMÉE - DOUBLON)
 
 // FONCTIONS MANQUANTES - À ajouter dans le script principal
 
@@ -6383,14 +6064,8 @@ function loadUserPreferences() {
         STATE.viewMode = prefs.simpleView ? 'simple' : 'complete';
         localStorage.setItem('viewMode', STATE.viewMode);
       }
-      // MODE SOMBRE DÉSACTIVÉ PAR DÉFAUT (ne pas charger depuis localStorage)
-      // L'utilisateur doit activer manuellement le mode sombre à chaque session
-      // Nettoyer darkMode du localStorage pour éviter toute réactivation
-      if (prefs.darkMode) {
-        delete prefs.darkMode;
-        localStorage.setItem('userPreferences', JSON.stringify(prefs));
-        console.log('🌞 Mode sombre nettoyé du localStorage (désactivé par défaut)');
-      }
+      // Mode sombre désactivé par défaut à chaque session
+      delete prefs.darkMode;
       
       if (prefs.lastFilter && prefs.lastFilter !== 'all') { setTimeout(() => applyQuickFilter(prefs.lastFilter), 1000); }
     }
@@ -6400,57 +6075,37 @@ function loadUserPreferences() {
 // 8. Fonction d'initialisation globale améliorée
 function initializeEnhancements() {
   loadUserPreferences();
-  // initDarkMode(); // ⚠️ DÉSACTIVÉ - Mode sombre bloqué par défaut
   enhanceSearch();
   createContextualHelp();
   createNotificationSystem();
   window.addEventListener('beforeunload', saveUserPreferences);
 
-  // ========== ANCIEN TUTORIEL DÉSACTIVÉ ==========
-  // Remplacé par OnboardingTour.autoStart() dans InterfaceV2_UIModules_Loader.html
 }
 // ... existing code ...
 // À la fin du DOMContentLoaded, après setupEventListeners() et openStartupModal();
 initializeEnhancements();
 // ... existing code ...
 
-// ========== PATCH DE CORRECTIONS CRITIQUES ==========
+// ========== PANNEAU HISTORIQUE (TIMELINE) ==========
 
-// 1. FIX: Historique timeline qui ne s'affiche pas
-function addToHistory(action) {
-  action.timestamp = new Date().toISOString();
-  
-  if (action.eleveId) {
-    const eleve = STATE.students[action.eleveId];
-    action.eleveName = eleve ? `${eleve.nom} ${eleve.prenom || ''}` : 'Inconnu';
-  }
-  
-  // Ajouter l'action à l'historique global
-  if (!STATE.historyTimeline) STATE.historyTimeline = [];
-  STATE.historyTimeline.push(action);
-  
-  // Mettre à jour le panneau
-  updateHistoryPanel();
-}
+if (!STATE.historyTimeline) STATE.historyTimeline = [];
 
 function updateHistoryPanel() {
   const container = document.getElementById('historyTimeline');
   if (!container) return;
-  
+
   container.innerHTML = '';
-  
-  // Utiliser historyTimeline au lieu de history
   const timeline = STATE.historyTimeline || [];
-  
-  timeline.slice().reverse().forEach((action, idx) => {
+
+  timeline.slice().reverse().forEach((action) => {
     const item = document.createElement('div');
     item.className = 'timeline-item';
-    
+
     let actionText = '';
     let details = '';
     let icon = 'fa-question';
     let color = '#6b7280';
-    
+
     switch (action.type) {
       case 'move':
         actionText = `Déplacement: ${action.eleveName || 'Élève'}`;
@@ -6459,162 +6114,94 @@ function updateHistoryPanel() {
         color = '#3b82f6';
         break;
       case 'swap':
-        const eleve1 = STATE.students[action.id1];
-        const eleve2 = STATE.students[action.id2];
-        actionText = `Échange effectué`;
-        details = `${eleve1?.nom || 'Élève 1'} ↔ ${eleve2?.nom || 'Élève 2'}`;
+        actionText = 'Échange effectué';
+        details = `${STATE.students[action.id1]?.nom || 'Élève 1'} ↔ ${STATE.students[action.id2]?.nom || 'Élève 2'}`;
         icon = 'fa-exchange-alt';
         color = '#f59e0b';
         break;
     }
-    
+
     item.innerHTML = `
-      <div class="timeline-dot" style="background: ${color};">
-        <i class="fas ${icon} text-xs"></i>
-      </div>
+      <div class="timeline-dot" style="background: ${color};"><i class="fas ${icon} text-xs"></i></div>
       <div class="timeline-content">
         <div class="timeline-time">${new Date(action.timestamp).toLocaleTimeString('fr-FR')}</div>
         <div class="timeline-action">${actionText}</div>
         <div class="timeline-details">${details}</div>
       </div>
     `;
-    
     container.appendChild(item);
   });
-  
-  // Afficher un message si vide
+
   if (timeline.length === 0) {
     container.innerHTML = '<div class="text-center text-gray-500 p-4">Aucune action enregistrée</div>';
   }
 }
 
-// Attacher updateHistoryPanel à window
 window.updateHistoryPanel = updateHistoryPanel;
 
-// FIX 1: Historique qui ne persiste pas correctement
-if (!STATE.historyTimeline) {
-  STATE.historyTimeline = [];
-}
 
 
-
-// 4. FIX: Styles manquants pour la timeline
-const timelineStyles = document.createElement('style');
-timelineStyles.textContent = `
-  .timeline-item {
-    position: relative;
-    padding-left: 2.5rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  
-  .timeline-item:hover {
-    background: #f8fafc;
-  }
-  
-  .timeline-item::before {
-    content: '';
-    position: absolute;
-    left: 1.25rem;
-    top: 2rem;
-    bottom: -1rem;
-    width: 2px;
-    background: #e5e7eb;
-  }
-  
-  .timeline-item:last-child::before {
-    display: none;
-  }
-  
-  .timeline-dot {
-    position: absolute;
-    left: 0.75rem;
-    top: 0.75rem;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .timeline-content {
-    padding: 0.5rem 0;
-  }
-  
-  .timeline-time {
-    font-size: 0.75rem;
-    color: #6b7280;
-    margin-bottom: 0.25rem;
-  }
-  
-  .timeline-action {
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 0.25rem;
-  }
-  
-  .timeline-details {
-    font-size: 0.875rem;
-    color: #4b5563;
-  }
+// ========== STYLES INJECTÉS (TIMELINE + ANIMATIONS) ==========
+const injectedStyles = document.createElement('style');
+injectedStyles.id = 'corescript-injected-styles';
+injectedStyles.textContent = `
+  .timeline-item { position: relative; padding-left: 2.5rem; cursor: pointer; transition: all 0.2s; }
+  .timeline-item:hover { background: #f8fafc; }
+  .timeline-item::before { content: ''; position: absolute; left: 1.25rem; top: 2rem; bottom: -1rem; width: 2px; background: #e5e7eb; }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot { position: absolute; left: 0.75rem; top: 0.75rem; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .timeline-content { padding: 0.5rem 0; }
+  .timeline-time { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem; }
+  .timeline-action { font-weight: 600; color: #1e293b; margin-bottom: 0.25rem; }
+  .timeline-details { font-size: 0.875rem; color: #4b5563; }
+  #statsPanel { transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease; }
+  #statsPanel.updating { opacity: 0.95; }
+  .chart-container { transition: opacity 0.2s ease; }
+  .stats-panel.updating .chart-container { opacity: 0.8; }
+  .metric-value { transition: color 0.2s ease, transform 0.2s ease; }
+  .metric-value.changed { transform: scale(1.05); }
+  .student-card { transition: all 0.2s ease; will-change: transform; }
+  .sortable-ghost { opacity: 0.5; transform: rotate(5deg); }
+  .sortable-chosen { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  @keyframes gentlePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.9; } }
+  .stats-panel.updating, .stats-updating { animation: gentlePulse 0.6s ease-in-out; }
 `;
-document.head.appendChild(timelineStyles);
+document.head.appendChild(injectedStyles);
 
-// 5. FIX: Variable activeFilter non définie globalement
+// ========== FILTRE RAPIDE ==========
 window.activeFilter = 'all';
 
-// 6. FIX: Fonction applyQuickFilter améliorée
 window.applyQuickFilter = function(filter) {
   window.activeFilter = filter;
-  
-  // Mettre à jour les boutons
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+
+  document.querySelectorAll('.filter-btn, .filter-btn-compact').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.filter === filter);
   });
-  
-  // Appliquer le filtre
+
   let visibleCount = 0;
   document.querySelectorAll('.student-card').forEach(card => {
     const eleve = STATE.students[card.dataset.id];
     if (!eleve) return;
-    
+
     let match = false;
-    
     switch (filter) {
-      case 'all':
-        match = true;
-        break;
-      case 'PERMUT':
-      case 'FIXE':
-        match = eleve.mobilite === filter;
-        break;
-      case 'ESP':
-      case 'ITA':
-      case 'ALL':
-        match = eleve.lv2 === filter;
-        break;
-      case 'D':
-        match = !!eleve.disso;
-        break;
-      case 'A':
-        match = !!eleve.asso;
-        break;
+      case 'all': match = true; break;
+      case 'PERMUT': case 'FIXE': match = eleve.mobilite === filter; break;
+      case 'ESP': case 'ITA': case 'ALL': match = eleve.lv2 === filter; break;
+      case 'D': match = !!eleve.disso; break;
+      case 'A': match = !!eleve.asso; break;
     }
-    
+
     card.classList.toggle('filtered-out', !match);
     if (match) visibleCount++;
   });
-  
-  // Notification du résultat
+
   if (filter !== 'all') {
     toast(`${visibleCount} élève(s) avec filtre "${filter}"`, 'info');
   }
 };
 
-// 7. FIX: Meilleure gestion des tooltips
+// ========== TOOLTIPS PERSONNALISÉS ==========
 document.addEventListener('DOMContentLoaded', () => {
   // Ajouter des tooltips riches sur les badges
   document.addEventListener('mouseover', (e) => {
@@ -6656,7 +6243,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// 8. FIX: Amélioration de la sauvegarde immédiate
+// ========== SAUVEGARDE IMMÉDIATE CACHE ==========
 window.saveImmediateCache = async function() {
   try {
     // 1. Ne rien faire si l'utilisateur n'a rien bougé
@@ -6687,7 +6274,6 @@ window.saveImmediateCache = async function() {
         const result = await gsRun('saveCacheData', cacheData);
         
         if (result && result.success) {
-          console.log('💾 Sauvegarde automatique CACHE réussie');
           
           // 2. Après succès → reset flag + horodatage + badge
           STATE.has_user_action = false;
@@ -6722,7 +6308,7 @@ window.saveImmediateCache = async function() {
   }
 };
 
-// 9. FIX: Indicateur de connexion Google Apps Script
+// ========== INDICATEUR DE CONNEXION ==========
 function checkGoogleAppsConnection() {
   const indicator = document.createElement('div');
   indicator.className = 'fixed bottom-4 right-4 text-xs';
@@ -6740,7 +6326,7 @@ function checkGoogleAppsConnection() {
 // Appeler au chargement
 setTimeout(checkGoogleAppsConnection, 1000);
 
-// 10. FIX: Amélioration du tri des colonnes
+// ========== TRI DES COLONNES ==========
 window.sortColumn = function(classe, sortType, direction = 'asc') {
   const dropZone = document.querySelector(`.droppable-zone[data-classe="${classe}"]`);
   if (!dropZone) return;
@@ -6809,11 +6395,9 @@ window.sortColumn = function(classe, sortType, direction = 'asc') {
   toast(`Classe ${classe} triée par ${sortType}`, 'info');
 };
 
-console.log('✅ Patch de corrections appliqué');
 
 // ========== MODULE DE GROUPES V2 - INTERFACE CLARIFIÉE ==========
 
-// FIX: Ajout d'un bouton Groupes dans le header - Version modulaire
 function addGroupsButton() {
   
   const nav = document.querySelector('.app-header nav');
@@ -6948,20 +6532,17 @@ function updateGroupsButton() {
 function notifyGroupsChanged() {
   updateGroupsButton();
   // Autres actions à effectuer quand les groupes changent
-  console.log('📊 Groupes mis à jour');
 }
 
 // ========== CODE À AJOUTER/MODIFIER DANS INTERFACEV2.HTML ==========
 
 // 1. Fonction unifiée openGroupsInterface - utilise le nouveau GroupsModuleComplete (modal intégrée)
 function openGroupsInterface(tab = 'creator') {
-  console.log('🚀 Ouverture de l\'interface des groupes via GroupsModuleComplete...');
 
   // Vérifier si GroupsModuleComplete est disponible (groupsModuleComplete.html)
   if (typeof window !== 'undefined' && window.GroupsModuleComplete && typeof window.GroupsModuleComplete.open === 'function') {
     try {
       window.GroupsModuleComplete.open();
-      console.log('✅ GroupsModuleComplete ouvert avec succès');
       return;
     } catch (error) {
       console.error('❌ Erreur lors de l\'ouverture de GroupsModuleComplete:', error);
@@ -6990,7 +6571,6 @@ function openGroupsInterface(tab = 'creator') {
             if (groupsWindow.GroupsUI && typeof groupsWindow.GroupsUI.switchTab === 'function') {
               clearInterval(checkInterval);
               groupsWindow.GroupsUI.switchTab(tab);
-              console.log('✅ Interface des groupes popup ouverte avec succès');
             }
           } catch (uiError) {
             clearInterval(checkInterval);
@@ -7012,7 +6592,6 @@ function openGroupsInterface(tab = 'creator') {
 
 // 2. Fonction pour notifier les changements de groupes
 window.notifyGroupsChanged = function() {
-  console.log('📢 Notification de changement de groupes reçue');
   updateGroupsButton();
   
   // Afficher un message de confirmation
@@ -7121,13 +6700,6 @@ function deleteAllGroups() {
     .deleteAllGroups();
 }
 
-// 5. Amélioration du menu dropdown des groupes - SUPPRIMÉ
-// Cette fonction est obsolète, remplacée par createEnhancedGroupsMenu() ligne 10828
-// L'initialisation se fait via initGroupsModule() qui appelle createEnhancedGroupsMenu()
-
-// 6. Initialisation au chargement - SUPPRIMÉ (conflit avec initGroupsModule ligne 10771)
-// Les fonctions initializeGroupsButton() et initializeGroupsMenu() n'existent pas
-// L'initialisation se fait via initGroupsModule() qui appelle createEnhancedGroupsMenu()
 
 
 // ========== FONCTIONS SUPPLÉMENTAIRES ==========
@@ -8886,7 +8458,6 @@ function configureAdvancedFeaturesButtons() {
           // Initialiser le contenu seulement si pas encore fait
           const statsContent = document.getElementById('statsContent');
           if (!statsContent.innerHTML.trim()) {
-            console.log('📊 Première ouverture - initialisation du contenu');
             if (typeof initCharts === 'function') {
               initCharts();
             }
@@ -8912,36 +8483,30 @@ function configureAdvancedFeaturesButtons() {
 
 // ========== INITIALISATION AU CHARGEMENT ==========
 
-// Ajouter au DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialiser le feedback en temps réel (mais ne pas l'afficher automatiquement)
-  setTimeout(() => {
-    if (RealTimeFeedback) {
-      RealTimeFeedback.init();
-    }
-  }, 500);
-  
-  // Configurer les boutons avancés dans le menu Actions après un délai
-  setTimeout(() => {
-    configureAdvancedFeaturesButtons();
-  }, 2000);
-  
-  // Configurer le bouton de fermeture du panneau des statistiques
+  // Feedback temps réel
+  setTimeout(() => { if (RealTimeFeedback) RealTimeFeedback.init(); }, 500);
+
+  // Boutons avancés
+  setTimeout(configureAdvancedFeaturesButtons, 2000);
+
+  // Fermeture stats
   const closeStatsBtn = document.getElementById('closeStats');
   if (closeStatsBtn) {
     closeStatsBtn.addEventListener('click', () => {
       closeStatsPanel();
-      // Mettre à jour aria-expanded
       const btnStats = document.getElementById('btnStats');
       if (btnStats) btnStats.setAttribute('aria-expanded', 'false');
-      console.log('📊 Panneau des statistiques fermé manuellement');
     });
   }
 
-  // Sauvegarder l'état initial
-  setTimeout(() => {
-    HistoryManager.saveState();
-  }, 3000);
+  // Toggle mode sombre flottant
+  const darkModeToggle = document.getElementById('darkModeToggle');
+  if (darkModeToggle) darkModeToggle.addEventListener('click', toggleDarkMode);
+
+  // Sauvegarder l'état initial + optimiser le rendu
+  setTimeout(() => { HistoryManager.saveState(); }, 3000);
+  setTimeout(optimizeCardRendering, 1000);
 });
 
 // Fonction pour initialiser les groupes après fermeture du modal
@@ -8974,26 +8539,7 @@ window.initializeGroupsAfterModal = function() {
   }
 };
 
-console.log('✅ Module de groupes et améliorations V2 appliqués');
-
-// ========== PATCH CORRECTIF POUR STATISTIQUES FLUIDES ==========
-// (ANCIENNE VERSION SUPPRIMÉE - REMPLACÉE PAR LA VERSION PROTÉGÉE)
-
-// ========== ADMIN > GROUPES - SUPPRIMÉ ==========
-// La fonction setupAdminGroupsToggle() a été COMPLÈTEMENT SUPPRIMÉE
-// Elle contenait un listener legacy sur #btnAdmin qui créait des conflits
-// Le menu Admin est géré UNIQUEMENT par AdminMenuFix (ligne 3070)
-// Le toggle Groupes est maintenant dans le menu Admin principal
-
-// Initialisation Admin Toggle désactivée (toggle déplacé dans le menu Groupes)
-// IMPORTANT: Le menu Admin est maintenant géré par AdminMenuFix uniquement
-
-// 2. ANCIENNE VERSION DE updateAllColumnStats SUPPRIMÉE - REMPLACÉE PAR LA VERSION PROPRE
-
-// 3. SUPPRIMÉ - Redéfinition problématique de updateCharts
-// La vraie fonction updateCharts est maintenant utilisée directement
-
-// 4. Améliorer le feedback en temps réel avec throttle
+// ========== THROTTLE DU FEEDBACK TEMPS RÉEL ==========
 if (window.RealTimeFeedback) {
   const originalUpdateMetrics = RealTimeFeedback.updateMetrics;
   let lastUpdate = 0;
@@ -9012,52 +8558,8 @@ if (window.RealTimeFeedback) {
   };
 }
 
-// 5. ANCIENNE VERSION DE handleSortEnd SUPPRIMÉE - REMPLACÉE PAR LA VERSION PROPRE
 
-// 6. CSS pour animations fluides (à ajouter dans une balise style)
-const fluidStyles = document.createElement('style');
-fluidStyles.textContent = `
-  /* Animation fluide pour le panneau stats */
-  #statsPanel {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-                opacity 0.3s ease;
-  }
-  
-  #statsPanel.updating {
-    opacity: 0.95;
-  }
-  
-  /* Transition fluide pour les graphiques */
-  .chart-container {
-    transition: opacity 0.2s ease;
-  }
-  
-  .stats-panel.updating .chart-container {
-    opacity: 0.8;
-  }
-  
-  /* Empêcher le scintillement des métriques */
-  .metric-value {
-    transition: color 0.2s ease, transform 0.2s ease;
-  }
-  
-  .metric-value.changed {
-    transform: scale(1.05);
-  }
-  
-  /* Animation subtile pour les mises à jour */
-  @keyframes gentlePulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.9; }
-  }
-  
-  .stats-panel.updating {
-    animation: gentlePulse 0.6s ease-in-out;
-  }
-`;
-document.head.appendChild(fluidStyles);
-
-// 7. Fonction utilitaire pour vérifier l'état des graphiques
+// Vérifier si les graphiques sont prêts
 window.areChartsReady = function() {
   return window.chartCommunication && 
          window.chartDistribution && 
@@ -9066,7 +8568,7 @@ window.areChartsReady = function() {
          typeof window.chartCommunication.update === 'function';
 };
 
-// 8. Optimiser le rendu des cartes élèves
+// Optimisation du rendu des cartes
 window.optimizeCardRendering = function() {
   // Utiliser requestAnimationFrame pour les mises à jour visuelles
   const cards = document.querySelectorAll('.student-card');
@@ -9092,37 +8594,8 @@ window.optimizeCardRendering = function() {
   requestAnimationFrame(processNextBatch);
 };
 
-// 9. Nettoyer les fonctions dupliquées au chargement
-document.addEventListener('DOMContentLoaded', () => {
-  // Supprimer les event listeners dupliqués
-  const processedElements = new Set();
-  
-  document.querySelectorAll('[id]').forEach(element => {
-    if (processedElements.has(element.id)) {
-      console.warn(`Élément dupliqué détecté: ${element.id}`);
-      return;
-    }
-    processedElements.add(element.id);
-  });
-  
-  // Attacher l'événement au toggle flottant mode sombre
-  const darkModeToggle = document.getElementById('darkModeToggle');
-  if (darkModeToggle) {
-    darkModeToggle.addEventListener('click', () => {
-      toggleDarkMode();
-    });
-    console.log('✅ Toggle mode sombre flottant attaché');
-  }
-  
-  // Optimiser le rendu initial
-  setTimeout(optimizeCardRendering, 1000);
-});
 
-console.log('✅ Patch de fluidité des statistiques appliqué');
-
-// ========== CORRECTIONS FINALES SUPPLÉMENTAIRES ==========
-
-// 1. Initialisation sécurisée des variables globales manquantes
+// ========== UTILITAIRES FINAUX ==========
 if (typeof window.chartLV2Details === 'undefined') {
   window.chartLV2Details = null;
 }
@@ -9169,73 +8642,16 @@ window.EventManager = {
   }
 };
 
-// 4. Initialisation unique de l'application
+// Initialisation unique de l'application
 window.addEventListener('DOMContentLoaded', () => {
-  // Éviter les initialisations multiples
-  if (window._initialized) {
-    console.log('⚠️ Application déjà initialisée, skip');
-    return;
-  }
+  if (window._initialized) return;
   window._initialized = true;
 
-  console.log('🚀 Initialisation unique de l\'application (DOMContentLoaded #2)');
-
-  console.log('⚠️ EventManager.clear() DÉSACTIVÉ pour préserver les event listeners du modal');
-
-  // Attendre que tout soit chargé
   setTimeout(() => {
-    if (typeof initRepartitionApp === 'function') {
-      console.log('🚀 Appel automatique de initRepartitionApp()');
-      initRepartitionApp();
-    }
+    if (typeof initRepartitionApp === 'function') initRepartitionApp();
   }, 100);
 });
 
-// 5. CSS pour transitions fluides (si pas déjà présent)
-if (!document.getElementById('fluid-animations-style')) {
-  const style = document.createElement('style');
-  style.id = 'fluid-animations-style';
-  style.textContent = `
-    .stats-panel {
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .student-card {
-      transition: all 0.2s ease;
-      will-change: transform;
-    }
-    
-    .chart-container {
-      transition: opacity 0.3s ease;
-    }
-    
-    /* Amélioration des animations de drag & drop */
-    .sortable-ghost {
-      opacity: 0.5;
-      transform: rotate(5deg);
-    }
-    
-    .sortable-chosen {
-      transform: scale(1.05);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-    
-    /* Animation pour les mises à jour de statistiques */
-    .stats-updating {
-      animation: gentlePulse 0.6s ease-in-out;
-    }
-    
-    @keyframes gentlePulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.9; }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// ========== ANCIENNES VERSIONS SUPPRIMÉES - REMPLACÉES PAR LA VERSION PROPRE ==========
-// Toutes les anciennes versions de updateStatsPanel et les protections excessives ont été supprimées
-// et remplacées par la version propre ajoutée à la fin du fichier
 
 })(); // Fin du DOM Environment Guard IIFE
 </script>
