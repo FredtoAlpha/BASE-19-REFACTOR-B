@@ -103,7 +103,7 @@
       transform: translate(-50%, -50%) !important;
       max-height: 85vh !important;
       overflow-y: auto !important;
-      z-index: 9999 !important;
+      z-index: var(--z-shepherd) !important;
     }
     
     .shepherd-content {
@@ -303,13 +303,16 @@
 </head>
 <body class="min-h-screen bg-gray-50 font-sans text-slate-800">
 
+<!-- SKIP LINK pour accessibilité clavier -->
+<a href="#board" class="skip-link" tabindex="1">Aller au contenu principal</a>
+
 <!-- SPINNER DE CHARGEMENT GLOBAL -->
-<div id="loadingSpinner" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50 hidden">
+<div id="loadingSpinner" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 hidden" style="z-index: var(--z-loading)">
   <div class="spinner"></div>
 </div>
 
 <!-- 1. MODAL DE DÉMARRAGE (indépendant) - DESIGN MODERNE -->
-<div id="startupModal" class="fixed inset-0 z-[200000] flex items-center justify-center bg-gradient-to-br from-purple-900/95 to-indigo-900/95 backdrop-blur-sm hidden transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+<div id="startupModal" class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/95 to-indigo-900/95 backdrop-blur-sm hidden transition-opacity duration-300" style="z-index: var(--z-startup)" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-full relative transform transition-all duration-300 scale-95 opacity-0" id="startupModalContent">
     <!-- Bouton de fermeture -->
     <button id="closeStartupModal" class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-all duration-200 hover:rotate-90" title="Fermer" aria-label="Fermer">
@@ -448,21 +451,21 @@
 </div>
 
 <!-- 2. BADGE DE MODE (indépendant) -->
-<div id="modeBadge" class="fixed top-2 left-2 z-40 px-3 py-1 rounded-full font-bold text-xs shadow-lg hidden"></div>
+<div id="modeBadge" class="fixed top-2 left-2 px-3 py-1 rounded-full font-bold text-xs shadow-lg hidden" style="z-index: var(--z-badge)"></div>
 
 <!-- 2b. BADGE AUTO-SAVE (timestamp dernière sauvegarde) -->
-<div id="autosaveBadge" class="fixed top-2 right-2 z-40 px-3 py-1 rounded-full font-bold text-xs shadow-lg bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">💾 Jamais</div>
+<div id="autosaveBadge" class="fixed top-2 right-2 px-3 py-1 rounded-full font-bold text-xs shadow-lg bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all duration-300" style="z-index: var(--z-badge)">💾 Jamais</div>
 
 <!-- 3. CONTENU PRINCIPAL DE L'APPLICATION (en dehors du modal) -->
 <!-- Header moderne avec infos complètes -->
 <header
   id="mainHeader"
-  class="sticky top-0 z-[1000] relative
+  class="sticky top-0 relative
          bg-white/80 backdrop-blur-md border-b border-slate-200 text-slate-900
          dark:bg-slate-950/70 dark:border-white/10 dark:text-slate-100
          shadow-[0_8px_24px_rgba(0,0,0,0.06)]
          px-4"
-  style="padding-top: var(--header-py); padding-bottom: var(--header-py);"
+  style="padding-top: var(--header-py); padding-bottom: var(--header-py); z-index: var(--z-header);"
   role="banner"
   aria-label="Navigation principale">
 
@@ -520,7 +523,10 @@
                      hover:bg-slate-700/90
                      tracking-[-0.03em]"
               title="Affichage : tailles, badges, fond clair/sombre, lisibilité. Mode vidéoprojecteur"
-              aria-label="Ouvrir les réglages">
+              aria-label="Ouvrir les réglages"
+              aria-expanded="false"
+              aria-haspopup="menu"
+              aria-controls="dropdownRegler">
         <span class="emoji opacity-80">👁</span>
         <span>Régler</span>
       </button>
@@ -533,7 +539,10 @@
                      hover:bg-slate-700/90
                      tracking-[-0.03em]"
               title="Ouvrir les statistiques : Vérifier l'équilibre des scores par classe et la parité"
-              aria-label="Ouvrir le menu Comparer">
+              aria-label="Ouvrir le menu Comparer"
+              aria-expanded="false"
+              aria-haspopup="menu"
+              aria-controls="dropdownComparer">
         <span class="emoji opacity-80">📊</span>
         <span>Comparer</span>
       </button>
@@ -579,8 +588,11 @@
                      shadow-[0_10px_20px_rgba(0,0,0,0.4)]
                      hover:bg-slate-700/90
                      tracking-[-0.03em]"
-              title="Annuler, retablir, historique, sources"
-              aria-label="Ouvrir le menu Éditer">
+              title="Echanger les élèves codes D ou les élèves OPT/LV2 sur deux classes. Clique A puis B pour les permuter."
+              aria-label="Ouvrir le menu Éditer"
+              aria-expanded="false"
+              aria-haspopup="menu"
+              aria-controls="dropdownEditer">
         <span class="emoji opacity-80">✍</span>
         <span>Editer</span>
       </button>
@@ -628,7 +640,8 @@
                      hover:bg-red-700"
               title="Protégé par mot de passe. Consulter la direction."
               aria-expanded="false"
-              aria-haspopup="menu">
+              aria-haspopup="menu"
+              aria-controls="dropdownAdmin">
         <span class="emoji opacity-90">🔒</span>
         <span>Admin</span>
         <span id="adminStatusIndicator" class="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 leading-none">OFF</span>
@@ -851,7 +864,7 @@
 </div>
 
 <!-- Modale de confirmation Finaliser -->
-<div id="finalizeConfirmModal" class="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-sm hidden transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="finalize-modal-title">
+<div id="finalizeConfirmModal" class="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm hidden transition-opacity duration-300" style="z-index: var(--z-modal)" role="dialog" aria-modal="true" aria-labelledby="finalize-modal-title">
   <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="finalizeConfirmContent">
     <!-- Icône et titre -->
     <div class="text-center mb-6">
@@ -980,7 +993,7 @@
 
 <!-- Panneau Statistiques -->
 <div id="statsPanel" class="fixed top-0 right-0 h-full bg-white shadow-xl transform translate-x-full transition-transform duration-300 stats-panel">
-  <div class="stats-panel-header flex items-start justify-between p-4 border-b border-slate-200 bg-white relative z-[120000]">
+  <div class="stats-panel-header flex items-start justify-between p-4 border-b border-slate-200 bg-white relative">
     <!-- Bloc gauche : bouton fermer + titre + sous-titre -->
     <div class="flex items-start gap-3">
       <button id="closeStats"
@@ -1035,11 +1048,12 @@
 <button
   id="statsFloatingClose"
   title="Fermer les statistiques (Échap)"
-  class="fixed top-[4.5rem] right-[1rem] z-[300000]
+  class="fixed top-[4.5rem] right-[1rem]
          bg-red-600 text-white text-[13px] font-bold leading-none
          px-3 py-2 rounded-lg shadow-[0_20px_40px_rgba(220,38,38,.5)]
          border border-red-700/40
-         hidden">
+         hidden"
+  style="z-index: var(--z-panel)">
   Fermer ✕
 </button>
 
@@ -1101,24 +1115,60 @@
 <!-- Menu Paramètres SUPPRIMÉ - Tout le contenu est maintenant dans le Menu Admin -->
 
 <!-- Menu Régler dropdown (Menu B - officiel) -->
-<div id="dropdownRegler" data-menu-root role="menu" aria-labelledby="btnRegler" class="fixed w-80 max-h-[70vh] overflow-y-auto bg-slate-50 dark:bg-slate-900 rounded-xl shadow-xl border border-slate-300 dark:border-slate-700 dark:shadow-[0_20px_60px_rgba(0,0,0,0.8)] z-[2000] hidden p-3 dropdown-menu">
+<div id="dropdownRegler" data-menu-root role="menu" aria-labelledby="btnRegler" class="fixed w-80 max-h-[70vh] overflow-y-auto bg-slate-50 dark:bg-slate-900 rounded-xl shadow-xl border border-slate-300 dark:border-slate-700 dark:shadow-[0_20px_60px_rgba(0,0,0,0.8)] hidden p-3 dropdown-menu" style="z-index: var(--z-dropdown)">
   
-  <!-- CARTE 0 : Densité du header -->
+  <!-- CARTE 0 : Préréglages rapides (EN PREMIER) -->
   <div class="cardRegler">
     <div class="cardHeader">
-      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Affichage général</div>
+      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><i class="fas fa-magic mr-2 text-purple-600"></i>Préréglages</div>
+      <div class="text-[11px] text-slate-400 dark:text-slate-500">1 clic</div>
+    </div>
+
+    <div class="cardBody space-y-1">
+      <button class="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left rounded-lg border border-transparent hover:border-blue-200 dark:hover:border-blue-800" id="presetProjection">
+        <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-tv text-blue-600 dark:text-blue-400 text-sm"></i>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-gray-800 dark:text-slate-100">Projection</div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400">Grand texte, contraste fort, sans scores</div>
+        </div>
+      </button>
+      <button class="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors text-left rounded-lg border border-transparent hover:border-green-200 dark:hover:border-green-800" id="presetImpression">
+        <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-print text-green-600 dark:text-green-400 text-sm"></i>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-gray-800 dark:text-slate-100">Impression</div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400">Fond blanc, texte compact, badges visibles</div>
+        </div>
+      </button>
+      <button class="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors text-left rounded-lg border border-transparent hover:border-purple-200 dark:hover:border-purple-800" id="presetAccessibilite">
+        <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-universal-access text-purple-600 dark:text-purple-400 text-sm"></i>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-gray-800 dark:text-slate-100">Accessibilit&eacute;</div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400">Contraste maximum, texte XL, symboles genre</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- CARTE 1 : Densité + Affichage rapide -->
+  <div class="cardRegler">
+    <div class="cardHeader">
+      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><i class="fas fa-eye mr-2 text-emerald-600"></i>Affichage</div>
       <div class="text-[11px] text-slate-400 dark:text-slate-500">Alt+D</div>
     </div>
 
-    <div class="cardBody">
+    <div class="cardBody space-y-2">
+      <!-- Densité inline -->
       <div class="flex items-center justify-between">
         <div>
           <div class="text-[13px] font-medium text-slate-800 dark:text-slate-100">Barre d'outils</div>
-          <div class="text-[11px] text-slate-500 dark:text-slate-400">
-            Compact (projection) / Confort (bureau)
-          </div>
+          <div class="text-[11px] text-slate-500 dark:text-slate-400">Compact / Confort</div>
         </div>
-
         <button id="btnToggleDensityInMenu"
                 class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-[12px] font-semibold
                        bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700
@@ -1127,29 +1177,56 @@
           Basculer
         </button>
       </div>
+
+      <div class="border-t border-slate-100 dark:border-slate-700 pt-2 mt-1"></div>
+
+      <!-- Toggles d'affichage -->
+      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
+        <input type="checkbox" id="showPrenoms" class="w-4 h-4 cursor-pointer" checked>
+        <span>Prénoms</span>
+      </label>
+      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
+        <input type="checkbox" id="showClasseOrigine" class="w-4 h-4 cursor-pointer" checked>
+        <span>Classe d'origine</span>
+      </label>
+      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
+        <input type="checkbox" id="showScores" class="w-4 h-4 cursor-pointer" checked>
+        <span>Scores</span>
+      </label>
+      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
+        <input type="checkbox" id="showGenderBadges" class="w-4 h-4 cursor-pointer">
+        <span>Badges sexe</span>
+      </label>
+      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
+        <input type="checkbox" id="whiteBackground" class="w-4 h-4 cursor-pointer">
+        <span>Fond blanc</span>
+      </label>
+
+      <div class="border-t border-slate-100 dark:border-slate-700 pt-2 mt-1 space-y-1">
+        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnPleinEcran">
+          <i class="fas fa-expand text-gray-500 dark:text-slate-400 text-sm"></i>
+          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Plein écran</span>
+        </button>
+        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnModeSombre">
+          <i class="fas fa-moon text-gray-500 dark:text-slate-400 text-sm"></i>
+          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Mode sombre</span>
+        </button>
+        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnZoomCartes">
+          <i class="fas fa-search-plus text-gray-500 dark:text-slate-400 text-sm"></i>
+          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Zoom cartes</span>
+        </button>
+      </div>
     </div>
   </div>
-  
-  <!-- CARTE 1 : Lisibilité -->
+
+  <!-- CARTE 2 : Lisibilité avancée (repliée par défaut) -->
   <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3">
     <button class="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors rounded-t-lg" onclick="toggleSection('lisibiliteSection')">
-      <span class="font-semibold text-gray-700 dark:text-slate-200"><i class="fas fa-text-height mr-2 text-blue-600"></i>Lisibilité</span>
+      <span class="font-semibold text-gray-700 dark:text-slate-200"><i class="fas fa-sliders-h mr-2 text-blue-600"></i>Réglages fins</span>
       <i class="fas fa-chevron-down text-gray-400 transition-transform" id="lisibiliteSectionIcon"></i>
     </button>
-    <div id="lisibiliteSection" class="px-4 pb-3 space-y-3">
-      
-      <!-- Checkboxes -->
-      <div class="space-y-2">
-        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
-          <input type="checkbox" id="showGenderBadges" class="w-4 h-4 cursor-pointer">
-          <span>Badges sexe</span>
-        </label>
-        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
-          <input type="checkbox" id="whiteBackground" class="w-4 h-4 cursor-pointer">
-          <span>Fond blanc</span>
-        </label>
-      </div>
-      
+    <div id="lisibiliteSection" class="px-4 pb-3 space-y-3 hidden">
+
       <!-- Taille des noms avec aperçus visuels -->
       <div>
         <label class="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase mb-2 block">Taille des noms</label>
@@ -1176,7 +1253,7 @@
           </label>
         </div>
       </div>
-      
+
       <!-- Style -->
       <div>
         <label class="text-xs font-semibold text-gray-500 uppercase mb-2 block">Style</label>
@@ -1199,7 +1276,7 @@
           </label>
         </div>
       </div>
-      
+
       <!-- Contraste -->
       <div>
         <label class="text-xs font-semibold text-gray-500 uppercase mb-2 block">Contraste</label>
@@ -1218,69 +1295,17 @@
           </label>
         </div>
       </div>
-      
+
     </div>
   </div>
-  
-  <!-- CARTE 2 : Affichage -->
+
+  <!-- CARTE 3 : Légende -->
   <div class="cardRegler">
     <div class="cardHeader">
-      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><i class="fas fa-eye mr-2 text-emerald-600"></i>Affichage</div>
+      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><i class="fas fa-info-circle mr-2 text-purple-600"></i>Légende</div>
     </div>
-    
+
     <div class="cardBody space-y-2">
-      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
-        <input type="checkbox" id="showPrenoms" class="w-4 h-4 cursor-pointer" checked>
-        <span>Prénoms</span>
-      </label>
-      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
-        <input type="checkbox" id="showClasseOrigine" class="w-4 h-4 cursor-pointer" checked>
-        <span>Classe d'origine</span>
-      </label>
-      <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
-        <input type="checkbox" id="showScores" class="w-4 h-4 cursor-pointer" checked>
-        <span>Scores</span>
-      </label>
-      
-      <div class="border-t border-slate-100 dark:border-slate-700 pt-2 mt-2 space-y-1">
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnPleinEcran">
-          <i class="fas fa-expand text-gray-500 dark:text-slate-400 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Plein écran</span>
-        </button>
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnModeSombre">
-          <i class="fas fa-moon text-gray-500 dark:text-slate-400 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Mode sombre</span>
-        </button>
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="btnZoomCartes">
-          <i class="fas fa-search-plus text-gray-500 dark:text-slate-400 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Zoom cartes</span>
-        </button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- CARTE 3 : Légende & Préréglages -->
-  <div class="cardRegler">
-    <div class="cardHeader">
-      <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><i class="fas fa-info-circle mr-2 text-purple-600"></i>Légende & Préréglages</div>
-    </div>
-    
-    <div class="cardBody space-y-2">
-      <!-- Préréglages -->
-      <div class="space-y-1">
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="presetProjection">
-          <i class="fas fa-tv text-blue-600 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Mode Projection</span>
-        </button>
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="presetImpression">
-          <i class="fas fa-print text-green-600 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Mode Impression</span>
-        </button>
-        <button class="w-full px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left rounded" id="presetAccessibilite">
-          <i class="fas fa-universal-access text-purple-600 text-sm"></i>
-          <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Mode Accessibilité</span>
-        </button>
-      </div>
       
       <div class="border-t border-slate-100 dark:border-slate-700 pt-2"></div>
       
@@ -1370,7 +1395,7 @@
 <!-- FIN Menu Régler -->
 
 <!-- Menu Éditer (déplacé ici pour éviter stacking context du header) -->
-<div id="dropdownEditer" class="fixed w-80 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 z-[2000] hidden dropdown-menu" style="max-height: 80vh; overflow-y: auto;">
+<div id="dropdownEditer" class="fixed w-80 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 hidden dropdown-menu" style="max-height: 80vh; overflow-y: auto; z-index: var(--z-dropdown);">
   
   <!-- Mode Permutation -->
   <div class="border-b border-gray-100">
@@ -1415,7 +1440,7 @@
 <!-- FIN Menu Éditer -->
 
 <!-- Menu Comparer (déplacé ici pour éviter stacking context du header) -->
-<div id="dropdownComparer" class="fixed w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-[100000] hidden" style="max-height: 80vh; overflow-y: auto;">
+<div id="dropdownComparer" class="fixed w-80 bg-white rounded-lg shadow-xl border border-gray-200 hidden" style="max-height: 80vh; overflow-y: auto; z-index: var(--z-dropdown);">
   
   <!-- Statistiques (ouvre le panneau stats) -->
   <div class="border-b border-gray-100">
@@ -1437,7 +1462,7 @@
 <!-- FIN Menu Comparer -->
 
 <!-- Menu Admin (déplacé ici pour éviter stacking context du header) -->
-<div id="dropdownAdmin" data-menu-root class="fixed w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-[100000] hidden transition-all duration-200 ease-out opacity-0 scale-95" style="max-height: 80vh; overflow-y: auto; transform-origin: top right;">
+<div id="dropdownAdmin" data-menu-root class="fixed w-80 bg-white rounded-lg shadow-xl border border-gray-200 hidden transition-all duration-200 ease-out opacity-0 scale-95" style="max-height: 80vh; overflow-y: auto; transform-origin: top right; z-index: var(--z-dropdown);">
   
   <!-- Message de verrouillage (affiché si non déverrouillé) -->
   <div id="adminLockMessage" class="px-4 py-6">
@@ -1683,7 +1708,8 @@ function showAnalyticsDashboard(snapshot) {
   // Créer le modal
   const modal = document.createElement('div');
   modal.id = 'analyticsDashboardModal';
-  modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60';
+  modal.className = 'fixed inset-0 flex items-center justify-center bg-black bg-opacity-60';
+  modal.style.zIndex = 'var(--z-modal)';
   modal.innerHTML = `
     <div class="bg-white rounded-lg shadow-xl w-11/12 h-5/6 max-w-7xl overflow-hidden flex flex-col">
       <!-- Header -->
@@ -2567,6 +2593,103 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+})();
+</script>
+
+<!-- RACCOURCIS CLAVIER OVERLAY -->
+<div id="shortcutsOverlay" role="dialog" aria-modal="true" aria-label="Raccourcis clavier">
+  <div class="shortcuts-panel">
+    <div class="flex items-center justify-between mb-4">
+      <h3><i class="fas fa-keyboard"></i> Raccourcis clavier</h3>
+      <button onclick="document.getElementById('shortcutsOverlay').classList.remove('show')" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center justify-center" aria-label="Fermer">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mb-4">
+      <div class="text-xs font-semibold text-gray-500 uppercase mb-2">Navigation</div>
+      <div class="shortcut-row"><span class="action">Ouvrir les raccourcis</span><span class="kbd">Ctrl + ?</span></div>
+      <div class="shortcut-row"><span class="action">Rechercher un élève</span><span class="kbd">Ctrl + K</span></div>
+      <div class="shortcut-row"><span class="action">Fermer popup / modal</span><span class="kbd">Échap</span></div>
+      <div class="shortcut-row"><span class="action">Tutoriel guidé</span><span class="kbd">H</span></div>
+    </div>
+    <div class="mb-4">
+      <div class="text-xs font-semibold text-gray-500 uppercase mb-2">Affichage</div>
+      <div class="shortcut-row"><span class="action">Densité compact / XL</span><span class="kbd">Alt + D</span></div>
+      <div class="shortcut-row"><span class="action">Mode sombre</span><span class="kbd">Alt + N</span></div>
+      <div class="shortcut-row"><span class="action">Plein écran</span><span class="kbd">F11</span></div>
+    </div>
+    <div>
+      <div class="text-xs font-semibold text-gray-500 uppercase mb-2">Actions</div>
+      <div class="shortcut-row"><span class="action">Sauvegarder brouillon</span><span class="kbd">Ctrl + S</span></div>
+      <div class="shortcut-row"><span class="action">Annuler (si disponible)</span><span class="kbd">Ctrl + Z</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hint discret raccourcis -->
+<div id="shortcutsHint" onclick="document.getElementById('shortcutsOverlay').classList.add('show')" title="Afficher les raccourcis clavier">
+  <i class="fas fa-keyboard" style="margin-right: 4px;"></i>Ctrl+?
+</div>
+
+<!-- SCRIPT : Raccourcis clavier + Indicateur modifications -->
+<script>
+(function() {
+  'use strict';
+
+  // ─── Raccourcis clavier ───
+  document.addEventListener('keydown', function(e) {
+    // Ctrl+? ou Ctrl+/ → toggle raccourcis
+    if (e.ctrlKey && (e.key === '?' || e.key === '/')) {
+      e.preventDefault();
+      var overlay = document.getElementById('shortcutsOverlay');
+      if (overlay) overlay.classList.toggle('show');
+    }
+
+    // Échap → fermer raccourcis
+    if (e.key === 'Escape') {
+      var overlay = document.getElementById('shortcutsOverlay');
+      if (overlay && overlay.classList.contains('show')) {
+        overlay.classList.remove('show');
+      }
+    }
+
+    // Ctrl+K → focus recherche
+    if (e.ctrlKey && e.key === 'k') {
+      e.preventDefault();
+      var search = document.getElementById('search');
+      if (search) search.focus();
+    }
+  });
+
+  // ─── Indicateur modifications non sauvegardées ───
+  var badge = document.getElementById('autosaveBadge');
+  if (badge) {
+    // Observer les mutations du badge pour détecter le texte "Jamais" ou timestamp
+    var origMarkUserAction = window.markUserAction;
+    window.markUserAction = function() {
+      if (typeof origMarkUserAction === 'function') origMarkUserAction();
+      // Ajouter la classe has-unsaved
+      if (badge && !badge.classList.contains('has-unsaved')) {
+        badge.classList.add('has-unsaved');
+        badge.style.position = 'relative'; // pour le ::before
+      }
+    };
+
+    // Observer quand la sauvegarde réussit (badge mis à jour avec timestamp)
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        if (m.type === 'childList' || m.type === 'characterData') {
+          var text = badge.textContent || '';
+          if (text.includes('Sauvegardé') || text.includes('sauvegardé')) {
+            badge.classList.remove('has-unsaved');
+          }
+        }
+      });
+    });
+    observer.observe(badge, { childList: true, characterData: true, subtree: true });
+  }
+
+  console.log('✅ Raccourcis clavier (Ctrl+?) et indicateur modifications initialisés');
 })();
 </script>
 
