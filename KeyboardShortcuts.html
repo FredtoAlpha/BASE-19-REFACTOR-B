@@ -85,6 +85,24 @@ function setupKeyboardShortcuts() {
       return;
     }
 
+    // S : Mode Swap (permutation d'eleves)
+    if (!e.ctrlKey && !e.altKey && key === 's') {
+      e.preventDefault();
+      if (typeof window.toggleSwapMode === 'function') {
+        window.toggleSwapMode();
+      }
+      return;
+    }
+
+    // R : Mode Reunion (projection optimisee)
+    if (!e.ctrlKey && !e.altKey && key === 'r') {
+      e.preventDefault();
+      if (typeof window.toggleModeReunion === 'function') {
+        window.toggleModeReunion();
+      }
+      return;
+    }
+
     // D : Mode sombre
     if (!e.ctrlKey && !e.altKey && key === 'd') {
       e.preventDefault();
